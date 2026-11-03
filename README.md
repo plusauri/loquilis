@@ -24,6 +24,10 @@ Loquilis is built almost entirely as a library, **`loquilis-kit`**, with a thin 
 
 Built with Kotlin Multiplatform and Compose Multiplatform, for desktop first.
 
+## Dependencies
+
+Loquilis depends on nothing in Tutilis, though it is designed to serve Tutilis's conversation needs. Tutilis may come to depend on Loquilis, never the reverse. See `doc/decisions/0001-dependency-direction.md`.
+
 ## Status
 
 Early. The repository is private while the model and the library take shape, and it will go public once the kit is usable on its own. Until then, nothing here is a stable API.
