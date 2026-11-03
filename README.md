@@ -1,0 +1,31 @@
+# Loquilis
+
+**Your agents, in a real window.**
+
+Loquilis is a desktop console for conversations with AI coding agents. It drives the agents' own headless modes (Claude Code today, with Grok, Codex and others to follow) and puts a real GUI on top of them. The name comes from the Latin *loqui*, "to speak, to converse".
+
+Loquilis records every turn of a conversation, from both sides, along with every command the agent runs along the way. All of it is stored on disk. You can view the same conversation in different ways and switch between them at any time:
+
+- **Messages:** speech bubbles, with you on the right and the agent on the left. Each turn's work folds into a "Ran 18 commands" line that opens on demand.
+- **Tree:** the conversation as a structure of turns, tool calls and branches.
+- **Search:** full-text search across every conversation and every command.
+
+## Library first
+
+Loquilis is built almost entirely as a library, **`loquilis-kit`**, with a thin application on top. The plan is for the kit to be the starting point for your own agent console: keep the model, storage and views, and add your own functionality.
+
+| Module | What it holds |
+|---|---|
+| `kit-model` | The conversation model: sessions, turns, steps and tool calls. It has no UI or agent dependency. |
+| `kit-store` | Disk-backed storage. Conversations are paged in on demand and never have to fit in memory. |
+| `kit-agents` | One adapter for each agent. Each adapter turns the agent's event stream into model steps. |
+| `kit-views` | The Compose views (messages, tree, search) over the model. Each can be skinned. |
+| `app` | The Loquilis desktop app, kept as thin as possible. |
+
+Built with Kotlin Multiplatform and Compose Multiplatform, for desktop first.
+
+## Status
+
+Early. The repository is private while the model and the library take shape, and it will go public once the kit is usable on its own. Until then, nothing here is a stable API.
+
+Loquilis is made by [Plusauri](https://www.plusauri.com), the makers of Tutilis.
