@@ -1,0 +1,232 @@
+syntax = "proto3";
+
+// The entry: the one record type of a conversation.
+//
+// Everything that happens in a conversation is an entry, in one append-only sequence. Each entry
+// names its parent, so the sequence forms a tree: branches are siblings, and a turn's work (tool
+// calls, subagents) hangs under it. Turns are derived from entries, never stored as their own tree.
+//
+// In the store, the [Entry] header fields are columns and only [EntryBody] is stored as proto bytes,
+// so paging and the tree view read columns and never decode a body they do not show.
+package loquilis.model.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "loquilis/model/v1/command.proto";
+import "loquilis/model/v1/content.proto";
+import "loquilis/model/v1/conversation.proto";
+
+option java_package = "loquilis.model";
+
+message Entry {
+  // ULID.
+  string id = 1;
+  string conversation_id = 2;
+  // Dense, per conversation, starting at 1: the order entries were appended.
+  int64 seq = 3;
+  // The entry this one follows or belongs under. Empty only for a conversation's first entry.
+  string parent_id = 4;
+  // When it happened: the agent's own timestamp when it gives one, else when the app received it.
+  google.protobuf.Timestamp at = 5;
+  Author author = 6;
+  EntryState state = 7;
+  Visibility visibility = 8;
+  // The raw events (the agent's own lines) this entry was parsed from. Unset for entries the app
+  // wrote itself, such as a user message or an app command.
+  RawRange raw = 9;
+  EntryBody body = 10;
+  // Data from apps built on the kit, e.g. tutilis.cogilis.v1.EngineCallsExt on a tool call.
+  repeated google.protobuf.Any extensions = 15;
+}
+
+// What the entry is. Exactly one kind.
+message EntryBody {
+  oneof kind {
+    UserMessage user_message = 1;
+    AgentText agent_text = 2;
+    Thinking thinking = 3;
+    ToolCall tool_call = 4;
+    ToolResult tool_result = 5;
+    Artifact artifact = 6;
+    SubAgent sub_agent = 7;
+    AppCommand app_command = 8;
+    PermissionRequest permission_request = 9;
+    TurnResult turn_result = 10;
+    Notice notice = 11;
+  }
+}
+
+enum Author {
+  AUTHOR_UNSPECIFIED = 0;
+  // The person at the keyboard.
+  AUTHOR_USER = 1;
+  // The agent's model.
+  AUTHOR_AGENT = 2;
+  // A tool the agent ran, reporting back.
+  AUTHOR_TOOL = 3;
+  // The app: commands it sent, notices it raised.
+  AUTHOR_APP = 4;
+  // The agent's process or harness, rather than its model (init, rate limits, retries).
+  AUTHOR_SYSTEM = 5;
+}
+
+enum EntryState {
+  ENTRY_STATE_UNSPECIFIED = 0;
+  // Still arriving: text is streaming, or a tool call has no result yet.
+  ENTRY_STATE_STREAMING = 1;
+  ENTRY_STATE_COMPLETE = 2;
+  // Did not complete because of an error.
+  ENTRY_STATE_FAILED = 3;
+  // Did not complete because the user interrupted.
+  ENTRY_STATE_INTERRUPTED = 4;
+}
+
+enum Visibility {
+  VISIBILITY_UNSPECIFIED = 0;
+  // Shown by default.
+  VISIBILITY_NORMAL = 1;
+  // Kept, but hidden by default and dropped by exports unless asked for (the agent's thinking).
+  VISIBILITY_PRIVATE = 2;
+}
+
+// An inclusive range of raw-event sequence numbers in the same conversation.
+message RawRange {
+  int64 first_seq = 1;
+  int64 last_seq = 2;
+}
+
+// A message the user sent. Each one starts a turn.
+message UserMessage {
+  Content text = 1;
+  repeated Attachment attachments = 2;
+}
+
+// Text the agent wrote.
+message AgentText {
+  Content text = 1;
+  TextRole role = 2;
+}
+
+enum TextRole {
+  TEXT_ROLE_UNSPECIFIED = 0;
+  // Written between tool calls, while working.
+  TEXT_ROLE_NARRATION = 1;
+  // The answer that ends the turn.
+  TEXT_ROLE_REPLY = 2;
+}
+
+// The agent's reasoning, when the agent exposes it. Stored with [VISIBILITY_PRIVATE].
+message Thinking {
+  Content text = 1;
+}
+
+// A tool the agent called. Its result is a separate [ToolResult] entry, whose parent is this one.
+message ToolCall {
+  // The agent's id for the call. The [ToolResult] repeats it.
+  string call_id = 1;
+  // The tool's name as the agent gave it: "Bash", "Read", "mcp__server__tool", ...
+  string tool = 2;
+  ToolKind kind = 3;
+  // The exact input. A shell command is its command text ("text/plain"); any other tool's input is
+  // its arguments as JSON ("application/json").
+  Content input = 4;
+  // The file the call reads or writes, for file tools. Lifted out of [input] so views and search
+  // need not parse it.
+  string target_path = 5;
+}
+
+// The kit's reading of what a tool does. Views group and show calls by kind; [ToolCall.tool] is
+// always kept, so a wrong reading loses nothing.
+enum ToolKind {
+  TOOL_KIND_UNSPECIFIED = 0;
+  TOOL_KIND_SHELL = 1;
+  TOOL_KIND_FILE_READ = 2;
+  TOOL_KIND_FILE_WRITE = 3;
+  TOOL_KIND_FILE_EDIT = 4;
+  TOOL_KIND_SEARCH = 5;
+  TOOL_KIND_WEB = 6;
+  TOOL_KIND_MCP = 7;
+  // A call that starts a subagent; its [SubAgent] entry follows.
+  TOOL_KIND_TASK = 8;
+  TOOL_KIND_OTHER = 9;
+}
+
+// What a tool call returned: its full output, however long.
+message ToolResult {
+  string call_id = 1;
+  Content output = 2;
+  bool is_error = 3;
+  // From the call to the result, when both times are known.
+  google.protobuf.Duration elapsed = 4;
+}
+
+// Something the agent made that a person would want to look at: a chart, a table, an image, a
+// written file. Each artifact's parent is the [ToolCall] that produced it.
+message Artifact {
+  ArtifactKind kind = 1;
+  // A caption: the chart's title, or the file's name.
+  string title = 2;
+  // The bytes, as they were when the turn ended. [BlobRef.media_type] says how to show them.
+  BlobRef blob = 3;
+  // Where the agent wrote it, relative to the conversation's workspace.
+  string workspace_path = 4;
+  // The [ToolCall.call_id] that produced it.
+  string produced_by_call_id = 5;
+  ArtifactChange change = 6;
+}
+
+enum ArtifactKind {
+  ARTIFACT_KIND_UNSPECIFIED = 0;
+  // A rendered picture of a chart (PNG, SVG, WebP).
+  ARTIFACT_KIND_IMAGE = 1;
+  // An interactive chart, shown in a sandboxed web view.
+  ARTIFACT_KIND_HTML = 2;
+  // Tabular data (CSV, TSV, Markdown table).
+  ARTIFACT_KIND_TABLE = 3;
+  // A document meant to be read (Markdown, PDF).
+  ARTIFACT_KIND_DOCUMENT = 4;
+  // Any other file the agent wrote.
+  ARTIFACT_KIND_FILE = 5;
+}
+
+enum ArtifactChange {
+  ARTIFACT_CHANGE_UNSPECIFIED = 0;
+  ARTIFACT_CHANGE_ADDED = 1;
+  ARTIFACT_CHANGE_MODIFIED = 2;
+}
+
+// A subagent the agent started. The subagent's own entries are children of this entry.
+message SubAgent {
+  // What the agent called it: the task description, or the subagent's type.
+  string label = 1;
+  // The [ToolCall.call_id] that started it.
+  string started_by_call_id = 2;
+}
+
+// The end of a turn, as the agent reported it.
+message TurnResult {
+  // From the user's message to the agent's reply.
+  google.protobuf.Duration duration = 1;
+  // This turn's usage. The agent may report session totals instead; the adapter takes differences.
+  Usage usage = 2;
+  // How many model round trips the agent made this turn.
+  int32 agent_turns = 3;
+  bool is_error = 4;
+}
+
+// Something worth showing that is not part of the conversation proper: a rate limit, a retry, an
+// agent warning, the app losing its connection to the agent's process.
+message Notice {
+  NoticeLevel level = 1;
+  string text = 2;
+  // A stable code for the kind of notice, for filtering: "rate_limit", "retry", "process_exit", ...
+  string code = 3;
+}
+
+enum NoticeLevel {
+  NOTICE_LEVEL_UNSPECIFIED = 0;
+  NOTICE_LEVEL_INFO = 1;
+  NOTICE_LEVEL_WARNING = 2;
+  NOTICE_LEVEL_ERROR = 3;
+}

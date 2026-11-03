@@ -1,6 +1,6 @@
 # Conversation model and storage
 
-- Status: **draft** 2026-11-03, for review. Nothing is built yet.
+- Status: **accepted in shape** 2026-11-03 (Dan). The protos are written (`kit-model/protobuf/loquilis/model/v1/`). Nothing is generated or built yet.
 - Rule this works under: `doc/decisions/0001-dependency-direction.md` (no dependency on Tutilis).
 
 ## What the model has to do
@@ -19,7 +19,7 @@ Loquilis records conversations with coding agents and shows them in several view
 | L6 | Search across every conversation | One full-text index over messages, tool inputs and tool outputs, for every conversation in the library. |
 | L7 | Live streaming | A turn grows while you watch. The model has an in-progress state, and partial text is a first-class entry state. |
 | L8 | Many agents | One adapter per agent, each normalizing its stream into the same entries. Claude holds a live session on stdin; Grok and Codex resume one process per turn. |
-| L9 | A library others build on | Core types stay small and general. Bespoke data goes in typed extensions. |
+| L9 | A library others build on, from other languages too | Core types stay small and general, and they are defined in a language-neutral schema. Bespoke data goes in typed extensions. |
 
 ### Tutilis's needs, read from `:cogilis-records` (schema 1)
 
@@ -27,129 +27,141 @@ These are requirements, not code. A Cogilis take must import into Loquilis with 
 
 | # | Cogilis has | Loquilis provides it as |
 |---|---|---|
-| T1 | `Conversation`: id, start and end, agents (cli, version, model, door, `live`/`resume`), cost, outcome | Core `Conversation` plus `AgentBinding`. Outcome and cost are core. |
-| T2 | `Turn`: the client message, then Cogilis's reply | A core derived `Turn`: one user message, and everything up to the agent's turn result. |
-| T3 | `Step` kinds: `narration`, `command`, `read`, `write`, each with a timestamp | Core entries `AgentText(role = Narration)` and `ToolCall` + `ToolResult`. A `ToolCall` carries a `ToolKind` hint (`Shell`, `FileRead`, `FileWrite`, `Mcp`, `Other`). |
-| T4 | A command's full output in `calc/`, its first lines inline | `ToolResult.output` as a `BlobRef` that holds a short inline head. |
-| T5 | The raw stream-json, gzipped, kept as the source of truth | Core `RawEvent` log, one row per line the agent emitted, with each entry pointing back to the raw lines it came from. |
-| T6 | Turn duration, cost, agent turn count, error flag | Core `TurnResult` entry. |
-| T7 | Attachments (a plan file sent with a message) | Core `Attachment` as a `BlobRef` on `UserMessage`. |
-| T8 | Engine calls, figures, answer files, disclaimer flag, emotion, beat id, asks-for, character, lesson, plan, script, panel | **Extensions** under namespace `tutilis.cogilis`, defined in Tutilis. None of them is core. |
-| T9 | `schema` version, tolerant reads | Core `SCHEMA` constant, `ignoreUnknownKeys`, and a migration table in the store. |
-| T10 | Derived renderings (`transcript.md`, player timeline) are pure functions over the record | The views and exporters read through the same model API, and nothing derived is stored as truth. |
-| T11 | Thinking blocks are dropped, because Cogilis records are public | Loquilis **keeps** thinking, flagged `private` so it is hidden by default. An exporter can drop it. |
+| T1 | `Conversation`: id, start and end, agents (cli, version, model, door, `live`/`resume`), cost, outcome | `Conversation`, `AgentBinding` (`Transport`), `Outcome`, `Usage`. The door goes in an extension. |
+| T2 | `Turn`: the client message, then Cogilis's reply | A derived `TurnSummary`: one `UserMessage`, and everything up to its `TurnResult`. |
+| T3 | `Step` kinds: `narration`, `command`, `read`, `write`, each with a timestamp | `AgentText` (`TEXT_ROLE_NARRATION`), and `ToolCall` with `ToolKind` (`SHELL`, `FILE_READ`, `FILE_WRITE`, `FILE_EDIT`, …) plus `target_path`. Every entry has `at`. |
+| T4 | A command's full output in `calc/`, its first lines inline | `ToolResult.output` as `Content` holding a `BlobRef` plus `head`. |
+| T5 | The raw stream-json, gzipped, kept as the source of truth | The raw-event log, referenced from each entry by `RawRange`. |
+| T6 | Turn duration, cost, agent turn count, error flag | `TurnResult`. |
+| T7 | Attachments (a plan file sent with a message) | `UserMessage.attachments`. |
+| T8 | Figures and answer files | **`Artifact`** (core): `ARTIFACT_KIND_IMAGE` / `HTML` / `FILE`, with `workspace_path`, `produced_by_call_id`, and `change`. |
+| T9 | Engine calls, disclaimer flag, emotion, beat id, asks-for, character, lesson, plan, script, panel, door | **Extensions**: messages in Tutilis's own `.proto` (`tutilis.cogilis.v1.*`), packed as `google.protobuf.Any`. None of them is core. |
+| T10 | A `schema` version and tolerant reads | Protobuf evolution rules, `buf breaking`, and `ExportManifest.schema`. |
+| T11 | Derived renderings (`transcript.md`, player timeline) are pure functions over the record | The views and exporters read through the same model API, and nothing derived is stored as truth. |
+| T12 | Thinking blocks are dropped, because Cogilis records are public | Loquilis keeps thinking as `Thinking` with `VISIBILITY_PRIVATE`. It is hidden by default and dropped by exports unless asked for. |
 
-## Core concepts
+## Modeling: protobuf is the source of truth
 
-```
-Library ─┬─ Conversation ─┬─ AgentBinding      (which cli, version, model, transport)
-         │                ├─ Entry*            (append-only, each with a parent → a tree)
-         │                ├─ Branch*           (named heads into the entry tree)
-         │                └─ RawEvent*         (the agent's own lines, verbatim)
-         └─ Blob*                              (content-addressed, shared across conversations)
-```
+As in Tutilis, the model is **defined in `.proto` files** and Kotlin is generated from them by Wire. A thin hand-written Kotlin layer adds the conveniences, and the database is the stored side. The reasons:
 
-### Entry: the one record type
+- **Other languages can take part.** The same files generate TypeScript (a web viewer, the Cogilis player), Python (analysis scripts), Swift and Go, with no second hand-written model to drift.
+- **The data lasts for years.** Conversations live in libraries and in git records repos. Protobuf's rules (never reuse a field number, mark retired fields `reserved`, add fields freely) are the discipline that kind of data needs.
+- **Extensions are typed and travel across languages.** An app built on the kit defines its own messages and attaches them as `google.protobuf.Any`. The kit stores them and round-trips them without reading them, and any language that has the extending app's `.proto` can decode them.
 
-Everything that happens is an `Entry`. There is a single table and a single sequence, and the kind says what the entry is.
+### The files
 
-```kotlin
-data class Entry(
-    val id: EntryId,              // ULID: sortable by time, unique across libraries
-    val conversation: ConversationId,
-    val seq: Long,                // dense, per conversation: the append order
-    val parent: EntryId?,         // tree edge (null only for the root)
-    val at: Instant,              // the agent's timestamp when it gives one, else arrival
-    val author: Author,           // User, Agent, Tool, App, System
-    val body: EntryBody,          // the sealed kinds below
-    val state: EntryState,        // Streaming, Complete, Failed, Interrupted
-    val rawRange: LongRange?,     // RawEvent seqs this entry was parsed from
-    val ext: Extensions,          // namespaced extensions (see below)
-)
+All in `kit-model/protobuf/loquilis/model/v1/`, package `loquilis.model.v1`, Kotlin package `loquilis.model`.
 
-sealed interface EntryBody {
-    data class UserMessage(val text: Content, val attachments: List<Attachment>)
-    data class AgentText(val text: Content, val role: TextRole)     // Narration, Reply
-    data class Thinking(val text: Content)                          // private by default
-    data class ToolCall(val callId: String, val tool: String, val kind: ToolKind, val input: Content)
-    data class ToolResult(val callId: String, val output: Content, val isError: Boolean)
-    data class SubAgent(val label: String)                          // a nested run; its entries are children
-    data class AppCommand(val command: Command)                     // L2: Interrupt, Permission, SetModel, Restart, …
-    data class TurnResult(val durationMs: Long?, val costUsd: Double?, val agentTurns: Int?, val isError: Boolean)
-    data class Notice(val level: Level, val text: String)           // rate limits, retries, agent warnings
-}
+| File | Messages |
+|---|---|
+| `conversation.proto` | `Conversation`, `AgentBinding` + `Transport`, `Outcome` + `OutcomeStatus`, `Usage`, `ParserRef`, `Branch` |
+| `entry.proto` | `Entry` (header) and `EntryBody` (a `oneof` of the kinds below), plus `Author`, `EntryState`, `Visibility`, `RawRange` |
+| `content.proto` | `Content` (a `oneof`: inline text or a `BlobRef`, plus a `head`), `BlobRef`, `Attachment` |
+| `command.proto` | `AppCommand` (a `oneof`: `Interrupt`, `PermissionDecision`, `SetModel`, `SetPermissionMode`, `Restart`, `Fork`) and `PermissionRequest` |
+| `view.proto` | Derived: `TurnSummary`, `SearchHit` |
+| `export.proto` | `ExportManifest`, and the layout of the export folder |
 
-/** Short text sits inline. Anything over the blob threshold is a reference with a preview. */
-sealed interface Content {
-    data class Inline(val text: String)
-    data class Stored(val blob: BlobRef, val head: String)          // head: first lines, for views and FTS snippets
-}
-```
+### The entry kinds
 
-**Why one type and not Turn → Step nesting.** The tree view, search, streaming and paging all work over one ordered, parent-linked stream. Nesting would make each of them walk a different shape. Turns are **derived**: a turn starts at a `UserMessage` and ends at its `TurnResult`. The store keeps a turn index (see below), so views still get turns cheaply.
+| `EntryBody` kind | Author | What it is |
+|---|---|---|
+| `UserMessage` | user | A message the user sent, with attachments. It starts a turn. |
+| `AgentText` | agent | Text the agent wrote: `NARRATION` between tool calls, or the `REPLY` that ends the turn. |
+| `Thinking` | agent | The agent's reasoning, private by default. |
+| `ToolCall` | agent | A tool the agent called: the tool's own name, its `ToolKind`, the exact input, and the target path for file tools. |
+| `ToolResult` | tool | Its full output, the error flag, and how long it took. Its parent is the `ToolCall`. |
+| `Artifact` | tool | A chart, table, image, document or file the agent made. Its parent is the `ToolCall` that made it. |
+| `SubAgent` | agent | A nested run. The subagent's entries are its children. |
+| `AppCommand` | app | Anything the app sent other than a message. |
+| `PermissionRequest` | system | The agent asking whether it may do something. A `PermissionDecision` answers it. |
+| `TurnResult` | system | The end of a turn: duration, usage, model round trips, error. |
+| `Notice` | system or app | A rate limit, a retry, a warning, a lost process. |
 
-### Branches
+**Why one entry type and not Turn → Step nesting.** The tree view, search, streaming and paging all work over one ordered, parent-linked stream. Nesting would make each of them walk a different shape. Turns are derived (`TurnSummary`), and the store keeps them up to date as entries arrive, so views still get turns cheaply.
 
-Editing and resending a message makes a new `UserMessage` whose parent is the edited message's parent. The two messages are siblings. A `Branch` is a named pointer to a leaf, and the main line is the branch the conversation was started on. A view shows one path from the root to a branch head. The tree view shows all of them.
+**Why `Entry` and `EntryBody` are separate messages.** The header (`id`, `seq`, `parent_id`, `at`, `author`, `state`, `visibility`) is what paging, the tree and search read. In the store, those fields are columns and only `EntryBody` is encoded as bytes, so a view never decodes a body it does not show. In an export, the whole `Entry` is written.
 
-Agents do not branch natively. A branch is resumed by replaying its path into a fresh session (the same way Cogilis's `--replay --through N` works), or, for `resume` agents, by forking the agent's session where it supports that. The model records which happened, as an `AppCommand(Fork)`.
+### Modeling conventions
 
-### Extensions
+- **Ids are ULIDs** in `string` fields: sortable by time and unique across libraries.
+- **Times are `google.protobuf.Timestamp`**, and durations are `google.protobuf.Duration`. Wire maps them to `Instant` and `Duration`.
+- **Money is `int64 cost_micro_usd`**, so totals add up exactly.
+- **Every enum's zero value is `*_UNSPECIFIED`**, so an unset field never reads as a real value.
+- **An entry names the agent's own tool name and also the kit's reading of it** (`tool` and `ToolKind`). A wrong reading loses nothing.
+- **Field 15 is `extensions`** on `Conversation`, `Entry` and `Branch`, by convention.
 
-```kotlin
-class ExtensionKey<T>(val namespace: String, val serializer: KSerializer<T>)
-// Tutilis, on its own side:
-val CogilisTurnExt = ExtensionKey("tutilis.cogilis.turn", CogilisTurnData.serializer())
-entry.ext[CogilisTurnExt]   // typed read; unknown namespaces round-trip as raw JSON
-```
+### The Kotlin layer
 
-Extensions attach to `Conversation`, `Entry` and `Branch`. The core never reads them. They are stored as JSON and survive a round trip even when the reading app does not know the namespace. An adapter or a post-processor can add them. Tutilis's engine-call parser would be a post-processor that reads `ToolCall` entries and writes `tutilis.cogilis.engineCalls`.
+Wire generates immutable classes. The hand-written layer is small, and it lives in `kit-model` beside the generated code:
 
-### Raw events are the truth
+- **A sealed view over `EntryBody`.** Wire represents a `oneof` as nullable fields, so the layer adds `val EntryBody.kind: EntryKind`, which lets code use an exhaustive `when`.
+- **Typed extension access.** `ExtensionKey<T : Message>` gives `entry.ext(key)` and `entry.withExt(key, value)` over the `Any` list.
+- **Id value classes and a ULID factory.**
+- **`Content` helpers**, such as `textOrNull()` and `isStored`.
 
-Every line an agent emits is stored verbatim in `RawEvent(conversation, seq, receivedAt, line)`, compressed in blocks. Entries are a **parse** of that log. If a parser is wrong, or an agent's format changes, the entries can be rebuilt from raw events (`reparse`). The parser's version is stored on the conversation, so it is clear which records a parser fix would change.
+Domain logic goes in extension functions, not in wrapper classes, as in Tutilis. The generated Kotlin is committed, as in Tutilis's `:modeling`, so a schema change shows up in review as a code diff.
+
+### Schema discipline
+
+- `buf lint` (STANDARD rules) and `buf breaking` against `main` (WIRE_JSON: breaking either the binary or the JSON form fails) run in CI. The config is in `buf.yaml`. It is not yet wired in, and `buf` is not yet installed here.
+- Field numbers are never reused, and a retired field is marked `reserved`, with its name.
+- A change that alters how entries are parsed from the same raw events bumps `ParserRef.version`. A change to the export layout bumps `ExportManifest.schema`.
+
+## Raw events are the truth
+
+Every line an agent emits is stored verbatim in the agent's own format, compressed in blocks. These lines are not protobuf on purpose: they are what the protos are parsed *from*. Entries name the raw lines they came from (`RawRange`). If a parser is wrong, or an agent's format changes, the entries can be rebuilt from raw events (`reparse`), and `ParserRef` says which records a parser fix would change.
 
 ## Storage
 
-**One SQLite library file** holds all conversations, so search can run across them (L6). It runs in WAL mode, so the UI can read while an agent writes. On the JVM this is `org.xerial:sqlite-jdbc`, the driver Tutilis already ships, behind a small `Store` interface so a KMP driver can replace it later.
+**One SQLite library file** holds all conversations, so search runs across them (L6). It uses WAL mode, so the UI can read while an agent writes. On the JVM, the driver is `org.xerial:sqlite-jdbc`, the one Tutilis ships, behind a `Store` interface. If size or a target ever calls for a different engine, only the `Store` implementation changes.
+
+Unlike Tutilis's dossier store, which keeps one proto3-JSON document per plan, Loquilis has a huge number of small entries that are paged and searched constantly. So **header fields are columns, and bodies are proto binary**. People read and diff the exports, which stay proto3-JSON text.
 
 | Table | Holds | Note |
 |---|---|---|
-| `conversation` | id, title, binding, created, updated, outcome, cost, parser version, ext | One row per conversation. |
-| `entry` | the skeleton: id, conversation, seq, parent, at, author, kind, state, inline text up to the threshold, blob ref, head, ext | Indexed on `(conversation, seq)` and `(parent)`. |
-| `turn` | conversation, ordinal, branch, first and last entry seq, the user text head, the counts (commands, errors), duration, cost | Kept up to date on append, so a view can page by turn without scanning entries. |
-| `branch` | id, conversation, name, head entry | |
-| `raw_event` | conversation, seq range, compressed block | Lines in blocks of about 256 KB, zstd or gzip. |
-| `blob` | sha256, size, mime, compressed bytes *or* a file path | Content-addressed and deduplicated. Bytes over 1 MB live as files beside the db. |
-| `entry_fts` | FTS5 over user text, agent text, tool input, tool output | External content. Large outputs are indexed in full but stored once. |
+| `conversation` | the `Conversation` header as columns, plus `extensions` as bytes | One row per conversation. |
+| `entry` | header columns: id, conversation, seq, parent, at, author, kind, state, visibility, raw range. `body` holds the `EntryBody` bytes, and `extensions` holds bytes. | Indexed on `(conversation, seq)` and `(parent)`. |
+| `turn` | `TurnSummary` as columns | Kept up to date on append. Rebuildable from entries. |
+| `branch` | `Branch` as columns | |
+| `raw_event` | conversation, seq range, compressed block of lines | Blocks of about 256 KB. |
+| `blob` | sha256, size, media type, compressed bytes *or* a file path | Content-addressed and deduplicated. Content up to 4 KB stays inline in the entry, and blobs over 1 MB are stored as files beside the db. Both thresholds are to be tuned against real tool outputs. |
+| `entry_fts` | FTS5 over user text, agent text, tool input, tool output | External content. |
 
-**Paging (L3, L4).** A view asks for `turns(conversation, branch, range)` and gets turn skeletons: who said what, as heads, with counts. It asks for bodies (`entry(id)` and `blob(ref)`) only when something is on screen or opened. The client cache is a bounded LRU of bodies. Nothing loads a whole conversation, and the memory a conversation uses stays the same no matter how long it is.
+A test asserts that the columns match the protos, as `DossierSchemaTest` does in Tutilis.
 
-**Append path (L7).** The adapter writes the raw line first, then upserts the entry. While text streams, a `Streaming` entry is updated in place, throttled to about 10 Hz on disk and kept live in memory. A crash loses at most the unflushed tail, and that tail can be rebuilt from the raw lines.
+**Paging (L3, L4).** A view asks for `turns(conversation, branch, range)` and gets `TurnSummary` rows. It asks for bodies (`entry(id)` and `blob(ref)`) only when something is on screen or opened. The client cache is a bounded LRU of bodies. Nothing loads a whole conversation, and the memory a conversation uses stays the same no matter how long it is.
 
-**Export.** A conversation exports to a portable folder: `conversation.json` (the skeleton and extensions), `blobs/`, and `raw.jsonl.gz`. That folder is what a git records repo, such as `plusauri/cogilis-conversations`, would hold. Import is the reverse. The folder, not the SQLite file, is the interchange format.
+**Append path (L7).** The adapter writes the raw line first, then upserts the entry. While text streams, a `STREAMING` entry is updated in place, throttled to about 10 Hz on disk and kept live in memory. A crash loses at most the unflushed tail, and that tail can be rebuilt from the raw lines.
+
+**Export.** A folder holding `manifest.json`, `entries.jsonl`, `blobs/` and `raw.jsonl.gz` (`export.proto`). That folder is what a git records repo such as `plusauri/cogilis-conversations` would hold. The folder, not the SQLite file, is the interchange format.
+
+## Libraries
+
+There is one default library, and **File → Open Library** opens another, as in Tutilis.
 
 ## Modules
 
 | Module | Depends on | Holds |
 |---|---|---|
-| `kit-model` | kotlinx-serialization only | `Entry`, `Content`, `Conversation`, `Branch`, `Extensions`, and `SCHEMA`. Pure, `commonMain`. |
+| `kit-model` | Wire runtime only | The `.proto` files, the generated Kotlin, and the thin Kotlin layer. Pure, `commonMain`. |
 | `kit-store` | `kit-model`, sqlite | `Store` (append, page, search, blobs, raw events), migrations, and export/import. |
 | `kit-agents` | `kit-model` | The `AgentAdapter` seam, `ClaudeLiveAdapter` (stream-json on stdin) and `GrokResumeAdapter`, each with a fixture test. |
-| `kit-views` | `kit-model`, `kit-store`, Compose | `ConversationViewModel` (paging, cache, live updates), and the Messages, Tree and Search views. |
-| `app` | all of the above | A window, a library picker, and settings. Kept thin. |
+| `kit-views` | `kit-model`, `kit-store`, Compose | `ConversationViewModel` (paging, cache, live updates), and the Messages view (user on the right, agent on the left), the Tree view and the Search view. |
+| `app` | all of the above | A window, the library picker, and settings. Kept thin. |
 
 ## Tests that prove the model
 
 - **Fixture round trip:** each recorded transcript (Claude stream-json, Grok streaming-json) goes raw → entries → export → import → identical entries.
-- **Cogilis parity:** a public Cogilis take (from a lesson plan) maps to entries with every step, output and timestamp accounted for. This is the 0001 proof.
+- **Cogilis parity:** a public Cogilis take (from a lesson plan) maps to entries with every step, output, figure and timestamp accounted for, and the Cogilis-only fields carried in extensions. This is the proof for rule 0001.
 - **Scale:** a synthetic conversation of 100k entries and 1 GB of output. Opening it, scrolling to the middle and searching it each stay within a fixed time and memory budget, asserted in the test.
 - **Crash:** kill the writer mid-stream, reopen, and the entries rebuilt from raw events match.
+- **Schema:** `buf lint` and `buf breaking`, plus the column-to-proto check.
 
-## Open questions
+## Decided 2026-11-03
 
-1. **Thinking:** keep it, hidden by default (proposed), or drop it as Cogilis does?
-2. **Branching in v1:** model it now (proposed: the cost is one parent column) but leave the UI for later?
-3. **One library or several:** a single default library (proposed), with **File → Open Library** as in Tutilis?
-4. **Blob threshold:** 4 KB inline, 1 MB to file (proposed). This needs tuning against real tool outputs.
-5. **Storage driver:** `sqlite-jdbc` on the JVM now (proposed), or a KMP driver from the start so iOS stays possible?
+1. **Thinking is kept**, as `VISIBILITY_PRIVATE`. It is hidden by default and left out of exports unless asked for.
+2. **Branching is modeled now** (`parent_id`, `Branch`, `Fork`). The branching UI comes later.
+3. **One default library**, with File → Open Library.
+4. **Blob thresholds:** content up to 4 KB stays inline, and blobs over 1 MB are stored as files. Both are to be tuned against real tool outputs.
+5. **Storage is SQLite** (`sqlite-jdbc`) for now, behind `Store`. It can be upgraded if size requires it.
+6. **Protobuf is the source of truth** for the model, as in Tutilis. Kotlin is generated by Wire, with a thin hand-written layer on top. The store keeps header columns and binary bodies, and exports are proto3-JSON.

@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+// The portable export of one conversation: the interchange format, not the store.
+//
+// An export is a folder:
+//
+//   manifest.json       ExportManifest, proto3-JSON
+//   entries.jsonl       one Entry per line, proto3-JSON, in seq order
+//   blobs/<sha256>      every blob the entries refer to, uncompressed
+//   raw.jsonl.gz        the agent's raw events, verbatim, one per line
+//
+// Text, so a git records repo can hold and diff it. Import is the reverse, and an export imported
+// into an empty library re-exports to identical files.
+package loquilis.model.v1;
+
+import "google/protobuf/timestamp.proto";
+import "loquilis/model/v1/conversation.proto";
+
+option java_package = "loquilis.model";
+
+message ExportManifest {
+  // The export format's version. Bumped on any change an older reader could misread.
+  int32 schema = 1;
+  Conversation conversation = 2;
+  repeated Branch branches = 3;
+  int64 entry_count = 4;
+  int64 raw_event_count = 5;
+  google.protobuf.Timestamp exported_at = 6;
+  // Whether [VISIBILITY_PRIVATE] entries (the agent's thinking) were included.
+  bool includes_private = 7;
+}

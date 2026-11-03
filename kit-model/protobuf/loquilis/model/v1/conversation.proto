@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+// A conversation, the agent it ran against, and its branches.
+package loquilis.model.v1;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "loquilis.model";
+
+// One conversation with one agent. Its entries (entry.proto) are stored beside it, never inside it,
+// so a conversation of any length loads as this small header.
+message Conversation {
+  // ULID: sortable by creation time, unique across libraries.
+  string id = 1;
+  // What the user calls it. Empty until named or summarized.
+  string title = 2;
+  google.protobuf.Timestamp created_at = 3;
+  // The last append. Maintained by the store.
+  google.protobuf.Timestamp updated_at = 4;
+  AgentBinding agent = 5;
+  // The directory the agent worked in, when it had one.
+  string workspace_path = 6;
+  Outcome outcome = 7;
+  // Running totals over every turn, maintained by the store.
+  Usage total_usage = 8;
+  // The branch the conversation was started on.
+  string main_branch_id = 9;
+  // Which parser turned the raw events into entries. A parser fix names the records it would change.
+  ParserRef parser = 10;
+  // Data from apps built on the kit. The kit stores and round-trips these without reading them.
+  // Each is a message from the extending app's own .proto, e.g. tutilis.cogilis.v1.TakeExt.
+  repeated google.protobuf.Any extensions = 15;
+}
+
+// Which agent a conversation ran against, and how it was driven.
+message AgentBinding {
+  // The agent's command-line tool: "claude", "grok", "codex", "gemini", ...
+  string cli = 1;
+  // The tool's version as it reported it. Empty when it did not.
+  string cli_version = 2;
+  // The model as requested. Empty means the tool's default.
+  string model = 3;
+  // The model as the agent reported using it, when it says. May differ from [model].
+  string reported_model = 4;
+  Transport transport = 5;
+  // The agent's own session id, used to resume a [TRANSPORT_RESUME] session.
+  string agent_session_id = 6;
+}
+
+enum Transport {
+  TRANSPORT_UNSPECIFIED = 0;
+  // One process for the whole conversation, messages written to its stdin (Claude stream-json).
+  TRANSPORT_LIVE = 1;
+  // One process per turn, re-attaching to the agent's saved session (codex exec resume, grok -p).
+  TRANSPORT_RESUME = 2;
+}
+
+message Outcome {
+  OutcomeStatus status = 1;
+  // Why, in a sentence. "the turn limit of 12 was reached", "the agent exited with status 1".
+  string reason = 2;
+}
+
+enum OutcomeStatus {
+  OUTCOME_STATUS_UNSPECIFIED = 0;
+  // Still open: more turns may follow.
+  OUTCOME_STATUS_ACTIVE = 1;
+  // Ended normally.
+  OUTCOME_STATUS_COMPLETED = 2;
+  // Ended because a limit was reached (turns, cost, time). [Outcome.reason] says which.
+  OUTCOME_STATUS_LIMIT_REACHED = 3;
+  // Ended by an error the conversation could not recover from.
+  OUTCOME_STATUS_ERROR = 4;
+}
+
+// Tokens and cost. Cost is in millionths of a US dollar so totals add up exactly.
+message Usage {
+  int64 input_tokens = 1;
+  int64 output_tokens = 2;
+  int64 cache_read_tokens = 3;
+  int64 cache_write_tokens = 4;
+  int64 cost_micro_usd = 5;
+}
+
+message ParserRef {
+  // The adapter that parsed the raw events, e.g. "claude-stream-json".
+  string adapter = 1;
+  // Its version. Bumped whenever the same raw events would parse to different entries.
+  int32 version = 2;
+}
+
+// A named line through the entry tree. A view shows the path from the root to [head_entry_id].
+message Branch {
+  // ULID.
+  string id = 1;
+  string conversation_id = 2;
+  // "main", or what the user named it. Empty for an unnamed fork.
+  string name = 3;
+  // The newest entry on the branch. Moves forward as entries are appended to it.
+  string head_entry_id = 4;
+  // The entry this branch split from. Empty for the main branch.
+  string forked_from_entry_id = 5;
+  google.protobuf.Timestamp created_at = 6;
+  repeated google.protobuf.Any extensions = 15;
+}

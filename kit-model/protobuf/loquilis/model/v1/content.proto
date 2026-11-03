@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+// Content and blobs: how text and bytes of any size are held.
+//
+// Short text sits inline in the record. Anything over the inline threshold (4 KB, see
+// doc/design/conversation-model.md) is stored once, content-addressed, as a blob, and the record keeps
+// a reference plus a short head so views and search snippets never have to fetch the body.
+package loquilis.model.v1;
+
+option java_package = "loquilis.model";
+
+// A reference to stored bytes. Blobs are content-addressed: the same bytes are stored once per
+// library, however many entries refer to them.
+message BlobRef {
+  // Lowercase hex SHA-256 of the uncompressed bytes. The blob's identity.
+  string sha256 = 1;
+  // Uncompressed size in bytes.
+  int64 size = 2;
+  // IANA media type of the bytes, e.g. "text/plain; charset=utf-8", "image/png".
+  string media_type = 3;
+}
+
+// Text or bytes, either held inline or stored as a blob.
+message Content {
+  oneof value {
+    // The whole text, when it is short enough to sit in the record.
+    string inline = 1;
+    // A reference to the stored bytes, when it is not.
+    BlobRef blob = 2;
+  }
+  // Media type of the content. Empty means "text/plain; charset=utf-8".
+  // Tool inputs that are structured arguments use "application/json".
+  string media_type = 3;
+  // The first lines of a stored body, for previews and search snippets. Empty when [inline] is set.
+  string head = 4;
+}
+
+// A file the user sent along with a message.
+message Attachment {
+  // The name the user saw, e.g. "plan.json".
+  string name = 1;
+  BlobRef blob = 2;
+  // Where the file came from on the user's machine, when it came from a path. Informational only.
+  string source_path = 3;
+}

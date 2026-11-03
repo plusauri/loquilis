@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+// What the app sends to the agent other than a message, and what the agent asks of the app.
+//
+// Every one of these is recorded as an entry, so "every command sent to the agent" is a query over
+// the record, the same as every command the agent ran.
+package loquilis.model.v1;
+
+option java_package = "loquilis.model";
+
+// A command from the app to the agent or to its process.
+message AppCommand {
+  oneof command {
+    Interrupt interrupt = 1;
+    PermissionDecision permission_decision = 2;
+    SetModel set_model = 3;
+    Restart restart = 4;
+    Fork fork = 5;
+    SetPermissionMode set_permission_mode = 6;
+  }
+}
+
+// Stop the agent's current turn.
+message Interrupt {}
+
+// The user's answer to a [PermissionRequest].
+message PermissionDecision {
+  // The [PermissionRequest.request_id] this answers.
+  string request_id = 1;
+  Decision decision = 2;
+  // What the user typed alongside the decision, if anything. Some agents pass it to the model.
+  string note = 3;
+}
+
+enum Decision {
+  DECISION_UNSPECIFIED = 0;
+  DECISION_ALLOW_ONCE = 1;
+  DECISION_ALLOW_ALWAYS = 2;
+  DECISION_DENY = 3;
+}
+
+// Switch the model for the turns that follow.
+message SetModel {
+  string model = 1;
+}
+
+// Change how the agent asks for permission, in the agent's own terms ("default", "acceptEdits", ...).
+message SetPermissionMode {
+  string mode = 1;
+}
+
+// Restart the agent's process, keeping the conversation.
+message Restart {
+  string reason = 1;
+}
+
+// Start a branch from an earlier entry.
+message Fork {
+  // The entry the new branch grows from.
+  string from_entry_id = 1;
+  // The branch created.
+  string branch_id = 2;
+  ForkMethod method = 3;
+}
+
+enum ForkMethod {
+  FORK_METHOD_UNSPECIFIED = 0;
+  // The path up to [Fork.from_entry_id] was re-sent to a fresh session.
+  FORK_METHOD_REPLAY = 1;
+  // The agent forked its own session at that point.
+  FORK_METHOD_NATIVE = 2;
+}
+
+// The agent asking the app (and so the user) whether it may do something.
+message PermissionRequest {
+  // The agent's id for the request. A [PermissionDecision] names it.
+  string request_id = 1;
+  // The [ToolCall.call_id] the agent wants to make, when the request is about one.
+  string call_id = 2;
+  // What the agent says it wants to do.
+  string description = 3;
+}

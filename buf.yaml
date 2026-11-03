@@ -1,0 +1,13 @@
+# buf: lint and breaking-change checks for the model's .proto files.
+#   buf lint
+#   buf breaking --against '.git#branch=main'
+# Not yet wired into CI; see doc/design/conversation-model.md, "Schema discipline".
+version: v2
+modules:
+  - path: kit-model/protobuf
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - WIRE_JSON

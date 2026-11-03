@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+// Derived records: computed from entries, never the truth. The store maintains them so views can
+// page and search without decoding entries. Any of them can be rebuilt from entries at any time.
+package loquilis.model.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "loquilis/model/v1/conversation.proto";
+
+option java_package = "loquilis.model";
+
+// One turn, as a view lists it: a user message and everything up to its turn result, on one branch.
+message TurnSummary {
+  string conversation_id = 1;
+  string branch_id = 2;
+  // 1-based position of the turn on its branch.
+  int32 ordinal = 3;
+  // The turn's [UserMessage] entry.
+  string user_entry_id = 4;
+  // The turn's [TurnResult] entry. Empty while the turn is still running.
+  string result_entry_id = 5;
+  // The entries the turn spans, inclusive.
+  int64 first_seq = 6;
+  int64 last_seq = 7;
+  google.protobuf.Timestamp started_at = 8;
+  // The first lines of the user's message.
+  string user_head = 9;
+  // The first lines of the agent's reply. Empty while the turn is still running.
+  string reply_head = 10;
+  int32 tool_call_count = 11;
+  int32 error_count = 12;
+  int32 artifact_count = 13;
+  google.protobuf.Duration duration = 14;
+  Usage usage = 15;
+}
+
+// One search hit.
+message SearchHit {
+  string conversation_id = 1;
+  string entry_id = 2;
+  // The matched text with the matches marked, for display.
+  string snippet = 3;
+  // Lower is a better match (FTS5 bm25).
+  double rank = 4;
+}
