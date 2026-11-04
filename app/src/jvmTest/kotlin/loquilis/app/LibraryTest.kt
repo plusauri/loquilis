@@ -1,6 +1,7 @@
 package loquilis.app
 
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.io.path.exists
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,7 +15,7 @@ import org.junit.jupiter.api.io.TempDir
 
 class LibraryTest {
     @TempDir
-    lateinit var dir: java.nio.file.Path
+    lateinit var dir: Path
 
     private fun fixture(name: String) = checkNotNull(javaClass.getResourceAsStream("/fixtures/claude-take/$name")) { name }
 
@@ -53,5 +54,15 @@ class LibraryTest {
         val path = dir.resolve("empty.sqlite")
         SqliteStore.open(path).close()
         assertFailsWith<IllegalStateException> { openLibrary(path) }
+    }
+
+    @Test
+    fun aTakeThatFailsToRecordLeavesNoScratchLibrary() {
+        fun scratches() = Files.list(Path.of(System.getProperty("java.io.tmpdir"))).use { paths ->
+            paths.filter { it.fileName.toString().startsWith("loquilis-review") }.toList().toSet()
+        }
+        val before = scratches()
+        assertFailsWith<Exception> { openLibrary(dir.resolve("no-such-take")) }
+        assertEquals(before, scratches())
     }
 }

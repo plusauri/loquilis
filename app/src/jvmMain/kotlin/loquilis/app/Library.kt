@@ -35,7 +35,12 @@ fun openLibrary(source: Path?): OpenedLibrary {
     }
     val scratch = Files.createTempDirectory("loquilis-review")
     val store = SqliteStore.open(scratch.resolve("library.sqlite"))
-    val id = source?.let { recordTake(store, it) } ?: recordBundledTake(store)
+    val id = try {
+        source?.let { recordTake(store, it) } ?: recordBundledTake(store)
+    } catch (failure: Exception) {
+        OpenedLibrary(store, "", scratch).close()
+        throw failure
+    }
     return OpenedLibrary(store, id, scratch)
 }
 
