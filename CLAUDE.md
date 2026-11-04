@@ -4,12 +4,20 @@ Loquilis is a desktop console and a Kotlin Multiplatform library (`loquilis-kit`
 
 ## Hard rules
 
-- **Loquilis depends on nothing in Tutilis.** That means no Gradle dependency, no composite build, no copied code, and no paths into a Tutilis checkout. Tutilis may depend on Loquilis later, never the reverse. Concepts specific to Tutilis go in namespaced extensions, never in core types. Full decision: `doc/decisions/0001-dependency-direction.md`.
+- **Loquilis depends on nothing in Tutilis.** That means no Gradle dependency, no composite build, no copied code, and no paths into a Tutilis checkout. Tutilis may depend on Loquilis later, never the reverse. Concepts specific to Tutilis go in typed extensions, never in core types. Full decision: `doc/decisions/0001-dependency-direction.md`.
 - **No private data in this repo.** It will go public. Fixtures come from public sources only (for example, Cogilis takes on lesson plans).
 - **American English** in code, comments and docs.
 - **Markdown is not hard-wrapped.** One line per paragraph or bullet.
 
 ## Design
 
-- Conversation model and storage: `doc/design/conversation-model.md` (draft).
+- Conversation model and storage: `doc/design/conversation-model.md`.
 - Decisions: `doc/decisions/`, numbered, one per file.
+
+## Commands
+
+Run from the repo root.
+
+- Regenerate Kotlin after a `.proto` change: `./gradlew :kit-model:generateCommonMainProtos`. The generated code in `kit-model/src/commonMain/kotlin/loquilis/model/` is committed and is never hand-edited. Hand-written code lives in `loquilis/kit/`.
+- Test: `./gradlew :kit-model:jvmTest`.
+- Schema checks: `buf lint` and `buf breaking --against '.git#ref=HEAD~1'`.

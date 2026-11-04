@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+// How an app built on the kit attaches its own data to the kit's records.
+package loquilis.model.v1;
+
+option java_package = "loquilis.model";
+
+// One message from the extending app's own .proto, held opaquely. The kit stores it and writes it
+// back without reading it, including a type this build has never heard of.
+//
+// Why not google.protobuf.Any: proto3-JSON writes an Any by expanding it, which needs the message's
+// descriptor, so a reader that lacks the type cannot write it out at all. An export from a plain
+// Loquilis of a conversation carrying another app's data would fail, in every language. This message
+// has the same field numbers as Any, so its binary form is identical, and in JSON the value is plain
+// base64 that any reader can carry. The cost is that an export shows an extension as base64 rather
+// than as readable fields.
+message Extension {
+  // Identifies the message, e.g. "type.googleapis.com/tutilis.cogilis.v1.TurnExt".
+  string type_url = 1;
+  // The encoded message.
+  bytes value = 2;
+}

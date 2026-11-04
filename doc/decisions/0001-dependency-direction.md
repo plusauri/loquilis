@@ -11,7 +11,7 @@
 ## How it is applied
 
 - The Loquilis model is written fresh. The Tutilis module `:cogilis-records` is read as a list of requirements, and no code is copied from it.
-- Concepts that belong only to Tutilis (lessons, plans, characters, emotions, script beats, engine calls) are never core types. They travel as namespaced **extensions** on the core model (`ext["tutilis.cogilis"]`), which Tutilis defines on its own side.
+- Concepts that belong only to Tutilis (lessons, plans, characters, emotions, script beats, engine calls) are never core types. They travel as typed **extensions** on the core model: messages in Tutilis's own `.proto`, held opaquely by the kit.
 - **The proof is a test, not a dependency.** Loquilis keeps a few real agent transcripts as test fixtures, and its tests show they import with nothing lost. They are copied in from public Cogilis takes on lesson plans, which are public teaching material. That test is how we know Loquilis can serve Tutilis.
 - No fixture, example, or doc in this repo may contain private financial data. The same rule as in Tutilis applies, and it matters more here because this repo will go public.
 

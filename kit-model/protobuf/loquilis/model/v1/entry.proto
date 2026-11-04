@@ -10,12 +10,12 @@ syntax = "proto3";
 // so paging and the tree view read columns and never decode a body they do not show.
 package loquilis.model.v1;
 
-import "google/protobuf/any.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 import "loquilis/model/v1/command.proto";
 import "loquilis/model/v1/content.proto";
 import "loquilis/model/v1/conversation.proto";
+import "loquilis/model/v1/extension.proto";
 
 option java_package = "loquilis.model";
 
@@ -37,7 +37,7 @@ message Entry {
   RawRange raw = 9;
   EntryBody body = 10;
   // Data from apps built on the kit, e.g. tutilis.cogilis.v1.EngineCallsExt on a tool call.
-  repeated google.protobuf.Any extensions = 15;
+  repeated Extension extensions = 15;
 }
 
 // What the entry is. Exactly one kind.

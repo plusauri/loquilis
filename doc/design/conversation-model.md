@@ -1,6 +1,6 @@
 # Conversation model and storage
 
-- Status: **accepted in shape** 2026-11-03 (Dan). The protos are written (`kit-model/protobuf/loquilis/model/v1/`). Nothing is generated or built yet.
+- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `kit-model/protobuf/loquilis/model/v1/`, and `kit-model` generates, builds and is tested. `kit-store`, `kit-agents`, `kit-views` and `app` are not started.
 - Rule this works under: `doc/decisions/0001-dependency-direction.md` (no dependency on Tutilis).
 
 ## What the model has to do
@@ -35,7 +35,7 @@ These are requirements, not code. A Cogilis take must import into Loquilis with 
 | T6 | Turn duration, cost, agent turn count, error flag | `TurnResult`. |
 | T7 | Attachments (a plan file sent with a message) | `UserMessage.attachments`. |
 | T8 | Figures and answer files | **`Artifact`** (core): `ARTIFACT_KIND_IMAGE` / `HTML` / `FILE`, with `workspace_path`, `produced_by_call_id`, and `change`. |
-| T9 | Engine calls, disclaimer flag, emotion, beat id, asks-for, character, lesson, plan, script, panel, door | **Extensions**: messages in Tutilis's own `.proto` (`tutilis.cogilis.v1.*`), packed as `google.protobuf.Any`. None of them is core. |
+| T9 | Engine calls, disclaimer flag, emotion, beat id, asks-for, character, lesson, plan, script, panel, door | **Extensions**: messages in Tutilis's own `.proto` (`tutilis.cogilis.v1.*`), held in `Extension`. None of them is core. |
 | T10 | A `schema` version and tolerant reads | Protobuf evolution rules, `buf breaking`, and `ExportManifest.schema`. |
 | T11 | Derived renderings (`transcript.md`, player timeline) are pure functions over the record | The views and exporters read through the same model API, and nothing derived is stored as truth. |
 | T12 | Thinking blocks are dropped, because Cogilis records are public | Loquilis keeps thinking as `Thinking` with `VISIBILITY_PRIVATE`. It is hidden by default and dropped by exports unless asked for. |
@@ -46,7 +46,7 @@ As in Tutilis, the model is **defined in `.proto` files** and Kotlin is generate
 
 - **Other languages can take part.** The same files generate TypeScript (a web viewer, the Cogilis player), Python (analysis scripts), Swift and Go, with no second hand-written model to drift.
 - **The data lasts for years.** Conversations live in libraries and in git records repos. Protobuf's rules (never reuse a field number, mark retired fields `reserved`, add fields freely) are the discipline that kind of data needs.
-- **Extensions are typed and travel across languages.** An app built on the kit defines its own messages and attaches them as `google.protobuf.Any`. The kit stores them and round-trips them without reading them, and any language that has the extending app's `.proto` can decode them.
+- **Extensions are typed and travel across languages.** An app built on the kit defines its own messages and attaches them as `Extension` (a type URL and the encoded bytes). The kit stores them and round-trips them without reading them, and any language that has the extending app's `.proto` can decode them.
 
 ### The files
 
@@ -57,6 +57,7 @@ All in `kit-model/protobuf/loquilis/model/v1/`, package `loquilis.model.v1`, Kot
 | `conversation.proto` | `Conversation`, `AgentBinding` + `Transport`, `Outcome` + `OutcomeStatus`, `Usage`, `ParserRef`, `Branch` |
 | `entry.proto` | `Entry` (header) and `EntryBody` (a `oneof` of the kinds below), plus `Author`, `EntryState`, `Visibility`, `RawRange` |
 | `content.proto` | `Content` (a `oneof`: inline text or a `BlobRef`, plus a `head`), `BlobRef`, `Attachment` |
+| `extension.proto` | `Extension`: an app's own message, held opaquely |
 | `command.proto` | `AppCommand` (a `oneof`: `Interrupt`, `PermissionDecision`, `SetModel`, `SetPermissionMode`, `Restart`, `Fork`) and `PermissionRequest` |
 | `view.proto` | Derived: `TurnSummary`, `SearchHit` |
 | `export.proto` | `ExportManifest`, and the layout of the export folder |
@@ -81,6 +82,12 @@ All in `kit-model/protobuf/loquilis/model/v1/`, package `loquilis.model.v1`, Kot
 
 **Why `Entry` and `EntryBody` are separate messages.** The header (`id`, `seq`, `parent_id`, `at`, `author`, `state`, `visibility`) is what paging, the tree and search read. In the store, those fields are columns and only `EntryBody` is encoded as bytes, so a view never decodes a body it does not show. In an export, the whole `Entry` is written.
 
+### Why `Extension` and not `google.protobuf.Any`
+
+The first draft used `Any`. A test found the flaw: proto3-JSON writes an `Any` by expanding it, which needs the message's descriptor, so a reader without the type cannot write it at all. A plain Loquilis exporting a conversation that carries another app's data would fail, and the same rule binds every language's JSON library. `Extension` has `Any`'s field numbers, so its binary form is identical (`ExtensionsTest` pins this), and in JSON its value is base64 that any reader can carry.
+
+**The cost:** an export shows an extension as base64, not as readable fields, so a git diff of a records repo will not show a change inside one. An app that wants readable records can write them out itself, knowing its own types, as Cogilis already writes `transcript.md`.
+
 ### Modeling conventions
 
 - **Ids are ULIDs** in `string` fields: sortable by time and unique across libraries.
@@ -94,8 +101,8 @@ All in `kit-model/protobuf/loquilis/model/v1/`, package `loquilis.model.v1`, Kot
 
 Wire generates immutable classes. The hand-written layer is small, and it lives in `kit-model` beside the generated code:
 
-- **A sealed view over `EntryBody`.** Wire represents a `oneof` as nullable fields, so the layer adds `val EntryBody.kind: EntryKind`, which lets code use an exhaustive `when`.
-- **Typed extension access.** `ExtensionKey<T : Message>` gives `entry.ext(key)` and `entry.withExt(key, value)` over the `Any` list.
+- **A sealed view over `EntryBody`.** Wire represents a `oneof` as nullable fields, so the layer adds `val EntryBody.kind: EntryKind`, which lets code use an exhaustive `when`. `EntryKind.Unknown` is a real case: a kind from a newer schema decodes to it and keeps its bytes. `AppCommand.kind` does the same for commands.
+- **Typed extension access.** `ExtensionKey<M>` gives `entry.ext(key)` and `entry.withExt(key, value)` over the `Extension` list.
 - **Id value classes and a ULID factory.**
 - **`Content` helpers**, such as `textOrNull()` and `isStored`.
 
@@ -103,7 +110,7 @@ Domain logic goes in extension functions, not in wrapper classes, as in Tutilis.
 
 ### Schema discipline
 
-- `buf lint` (STANDARD rules) and `buf breaking` against `main` (WIRE_JSON: breaking either the binary or the JSON form fails) run in CI. The config is in `buf.yaml`. It is not yet wired in, and `buf` is not yet installed here.
+- `buf lint` (STANDARD rules) and `buf breaking` against `main` (WIRE_JSON: breaking either the binary or the JSON form fails) run in CI. The config is in `buf.yaml`. CI is `.github/workflows/ci.yml`.
 - Field numbers are never reused, and a retired field is marked `reserved`, with its name.
 - A change that alters how entries are parsed from the same raw events bumps `ParserRef.version`. A change to the export layout bumps `ExportManifest.schema`.
 
@@ -165,3 +172,4 @@ There is one default library, and **File → Open Library** opens another, as in
 4. **Blob thresholds:** content up to 4 KB stays inline, and blobs over 1 MB are stored as files. Both are to be tuned against real tool outputs.
 5. **Storage is SQLite** (`sqlite-jdbc`) for now, behind `Store`. It can be upgraded if size requires it.
 6. **Protobuf is the source of truth** for the model, as in Tutilis. Kotlin is generated by Wire, with a thin hand-written layer on top. The store keeps header columns and binary bodies, and exports are proto3-JSON.
+7. **Extensions are our own `Extension` message**, not `google.protobuf.Any`, so an export never depends on knowing another app's types.
