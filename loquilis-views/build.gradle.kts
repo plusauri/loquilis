@@ -1,0 +1,43 @@
+@file:OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+
+plugins {
+    kotlin("multiplatform")
+    id("org.jetbrains.compose")
+    id("org.jetbrains.kotlin.plugin.compose")
+}
+
+kotlin {
+    // Desktop only for now: the store's one implementation is JVM.
+    jvm()
+
+    jvmToolchain(17)
+
+    sourceSets {
+        jvmMain.dependencies {
+            api(project(":loquilis-store"))
+            api(compose.foundation)
+            api(compose.material3)
+            api(compose.ui)
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+        }
+
+        jvmTest {
+            // The same recorded take the parser is tested on, with no second copy.
+            resources.srcDir("../loquilis-agents/src/jvmTest/resources")
+
+            dependencies {
+                implementation(kotlin("test"))
+                implementation(compose.desktop.currentOs)
+                implementation(compose.uiTest)
+                implementation("org.junit.jupiter:junit-jupiter-api:5.11.4")
+            }
+        }
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+    // A small heap is part of the proof: views that hold a conversation whole cannot pass here.
+    maxHeapSize = "384m"
+}

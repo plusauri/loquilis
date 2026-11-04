@@ -1,6 +1,6 @@
 # Conversation model and storage
 
-- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `loquilis-model/protobuf/loquilis/model/v1/`, `loquilis-model` and `loquilis-agents` (Claude) are built and tested. `loquilis-store` is built and tested. `app` is a read-only review window over a recorded take, held in memory, and does not read the store yet. `loquilis-views` is not started.
+- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `loquilis-model/protobuf/loquilis/model/v1/`, `loquilis-model` and `loquilis-agents` (Claude) are built and tested. `loquilis-store` and `loquilis-views` are built and tested. `app` is a thin read-only window over a library or a recorded take.
 - Rule this works under: `doc/decisions/0001-dependency-direction.md` (no dependency on Tutilis).
 
 ## What the model has to do
@@ -153,7 +153,7 @@ There is one default library, and **File → Open Library** opens another, as in
 | `loquilis-model` | Wire runtime only | The `.proto` files, the generated Kotlin, and the thin Kotlin layer. Pure, `commonMain`. |
 | `loquilis-store` | `loquilis-agents`, sqlite | `Store` (append, page, search, blobs, raw events), migrations, export/import, and `Recorder`/`recover`, which need the parser seam. |
 | `loquilis-agents` | `loquilis-model` | The `AgentAdapter` seam, `ClaudeLiveAdapter` (stream-json on stdin) and `GrokResumeAdapter`, each with a fixture test. |
-| `loquilis-views` | `loquilis-model`, `loquilis-store`, Compose | `ConversationViewModel` (paging, cache, live updates), and the Messages view (user on the right, agent on the left), the Tree view and the Search view. |
+| `loquilis-views` | `loquilis-store`, Compose | `ConversationPager` (turn summaries in pages, a bounded set of decoded turns), `ConversationState`, and the Messages view (user on the right, agent on the left), the Tree view, the Search view and the inspector. |
 | `app` | all of the above | A window, the library picker, and settings. Kept thin. |
 
 ## Agents
@@ -179,6 +179,7 @@ There is one default library, and **File → Open Library** opens another, as in
 - **Attachments are not sent.** `send` takes text only.
 - **Subagents are tested on hand-written lines only.** No recorded stream has one.
 - **Turns cover the main branch only.** Forked entries store and export, but no turn rows are kept for a fork until branching is built.
+- **A turn is read whole.** Views page by turn, so one turn of very many entries is decoded all at once when shown. Laying out one turn at a time also means a tool result arriving in a later turn than its call shows on its own line.
 - **`recover` assumes the parser wrote every entry but user messages.** An app-written entry such as an `AppCommand` will need handling there once commands are sent.
 - **Grok is not started.** `GrokResumeAdapter` is next after the store, or sooner if a second agent should test the seam.
 

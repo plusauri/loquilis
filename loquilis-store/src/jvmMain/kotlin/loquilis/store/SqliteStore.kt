@@ -165,8 +165,9 @@ class SqliteStore private constructor(
         extensions = extensionsOf(r.getBytes("extensions")),
     )
 
+    /** Inside a transaction this reads through the writer, or it would miss what that transaction wrote. */
     override fun conversation(id: String): Conversation? =
-        query("SELECT * FROM conversation WHERE id = ?", id) { it.one(::conversationOf) }
+        if (Thread.holdsLock(writer) && depth > 0) conversationInWrite(id) else query("SELECT * FROM conversation WHERE id = ?", id) { it.one(::conversationOf) }
 
     private fun conversationInWrite(id: String): Conversation? =
         writerQuery("SELECT * FROM conversation WHERE id = ?", id) { it.one(::conversationOf) }
@@ -378,6 +379,11 @@ class SqliteStore private constructor(
 
     override fun turnCount(conversationId: String, branchId: String): Int = query(
         "SELECT count(*) FROM turn WHERE conversation_id = ? AND branch_id = ?", conversationId, branchId,
+    ) { it.next(); it.getInt(1) }
+
+    override fun turnOf(conversationId: String, branchId: String, seq: Long): Int = query(
+        "SELECT coalesce(max(ordinal), 0) FROM turn WHERE conversation_id = ? AND branch_id = ? AND first_seq <= ?",
+        conversationId, branchId, seq,
     ) { it.next(); it.getInt(1) }
 
     override fun rebuildTurns(conversationId: String) = transaction {

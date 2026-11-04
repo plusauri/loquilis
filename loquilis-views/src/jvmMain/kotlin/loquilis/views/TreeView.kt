@@ -1,4 +1,4 @@
-package loquilis.app
+package loquilis.views
 
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
@@ -15,14 +15,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,58 +32,97 @@ import loquilis.model.Entry
 import loquilis.model.EntryState
 import loquilis.model.Visibility
 
+/**
+ * Each turn is one line until opened, drawn from its summary with no entry read, so the outline of a
+ * conversation of any length is immediate.
+ */
 @Composable
-fun TreeView(state: ReviewState, list: LazyListState) {
-    val rows by remember(state) { derivedStateOf { state.visibleTreeRows() } }
+fun TreeView(state: ConversationState, list: LazyListState) {
+    val pager = state.pager
 
     LaunchedEffect(Unit) {
-        val id = state.selectedId ?: return@LaunchedEffect
-        val at = rows.indexOfFirst { it.entry.id == id }
-        if (at >= 0) list.scrollToItem(at)
+        val at = state.selectedId?.let(state::treeIndex) ?: return@LaunchedEffect
+        list.scrollToItem(at)
     }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 10.dp)) {
-            items(rows, key = { it.entry.id }) { row ->
-                TreeLine(
-                    row = row,
-                    hasChildren = row.entry.id in state.treeParents,
-                    collapsed = row.entry.id in state.collapsed,
-                    selected = row.entry.id == state.selectedId,
-                    onToggle = { state.toggleCollapsed(row.entry.id) },
-                    onSelect = { state.selectedId = row.entry.id },
-                )
-            }
+            turnItems(
+                first = pager.firstOrdinal,
+                last = pager.lastOrdinal,
+                open = state.openTreeTurns.keys,
+                closed = { ordinal ->
+                    val summary = pager.summary(ordinal)
+                    TreeLine(
+                        depth = 0,
+                        label = "You".takeIf { summary != null } ?: "Start",
+                        text = summary?.user_head?.lineSequence()?.firstOrNull() ?: "Before the first message",
+                        emphasized = true,
+                        failed = false,
+                        tag = turnTag(summary),
+                        fold = TreeFold.Closed,
+                        selected = summary?.user_entry_id == state.selectedId,
+                        onToggle = { state.toggleTreeTurn(ordinal) },
+                        onSelect = { summary?.let { state.selectedId = it.user_entry_id } },
+                    )
+                },
+                opened = { ordinal ->
+                    val turn = checkNotNull(state.openTreeTurns[ordinal])
+                    itemsIndexed(state.treeRows(turn), key = { _, row -> row.entry.id }) { index, row ->
+                        val id = row.entry.id
+                        val folds = index == 0 || id in turn.treeParents
+                        TreeLine(
+                            depth = row.depth,
+                            label = kindLabel(row.entry),
+                            text = headline(row.entry),
+                            emphasized = row.entry.body?.user_message != null,
+                            failed = row.entry.state == EntryState.ENTRY_STATE_FAILED,
+                            tag = tag(row.entry),
+                            fold = when {
+                                !folds -> TreeFold.None
+                                id in state.collapsed -> TreeFold.Closed
+                                else -> TreeFold.Open
+                            },
+                            selected = id == state.selectedId,
+                            onToggle = { if (index == 0) state.toggleTreeTurn(ordinal) else state.toggleCollapsed(id) },
+                            onSelect = { state.selectedId = id },
+                        )
+                    }
+                },
+            )
         }
         VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
     }
 }
 
+private enum class TreeFold { None, Open, Closed }
+
 @Composable
 private fun TreeLine(
-    row: TreeRow,
-    hasChildren: Boolean,
-    collapsed: Boolean,
+    depth: Int,
+    label: String,
+    text: String,
+    emphasized: Boolean,
+    failed: Boolean,
+    tag: String?,
+    fold: TreeFold,
     selected: Boolean,
     onToggle: () -> Unit,
     onSelect: () -> Unit,
 ) {
     val palette = LocalPalette.current
-    val entry = row.entry
-    val failed = entry.state == EntryState.ENTRY_STATE_FAILED
-    val isUser = entry.body?.user_message != null
     Row(
         Modifier
             .fillMaxWidth()
             .background(if (selected) palette.selection else Color.Transparent)
             .clickable(onClick = onSelect)
-            .padding(start = (12 + 18 * row.depth).dp, end = 20.dp, top = 3.dp, bottom = 3.dp),
+            .padding(start = (12 + 18 * depth).dp, end = 20.dp, top = 3.dp, bottom = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (hasChildren) {
+        if (fold != TreeFold.None) {
             Text(
-                if (collapsed) "▸" else "▾",
+                if (fold == TreeFold.Closed) "▸" else "▾",
                 color = palette.muted,
                 fontSize = 12.sp,
                 modifier = Modifier.width(14.dp).clickable(onClick = onToggle),
@@ -95,7 +131,7 @@ private fun TreeLine(
             Spacer(Modifier.width(14.dp))
         }
         Text(
-            kindLabel(entry),
+            label,
             color = if (failed) palette.failed else palette.accent,
             fontSize = 12.sp,
             fontFamily = FontFamily.Monospace,
@@ -103,15 +139,15 @@ private fun TreeLine(
             maxLines = 1,
         )
         Text(
-            headline(entry),
+            text,
             color = if (failed) palette.failed else palette.ink,
             fontSize = 13.sp,
-            fontWeight = if (isUser) FontWeight.SemiBold else FontWeight.Normal,
+            fontWeight = if (emphasized) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        tag(entry)?.let { Text(it, color = palette.muted, fontSize = 11.sp) }
+        tag?.let { Text(it, color = palette.muted, fontSize = 11.sp) }
     }
 }
 

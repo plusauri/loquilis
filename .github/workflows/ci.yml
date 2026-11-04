@@ -18,7 +18,7 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Test
-        run: ./gradlew :loquilis-model:jvmTest :loquilis-agents:jvmTest :loquilis-store:jvmTest :app:jvmTest
+        run: ./gradlew :loquilis-model:jvmTest :loquilis-agents:jvmTest :loquilis-store:jvmTest :loquilis-views:jvmTest :app:jvmTest
       - name: Generated code matches the protos
         run: |
           ./gradlew :loquilis-model:generateCommonMainProtos

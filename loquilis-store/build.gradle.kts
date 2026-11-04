@@ -14,6 +14,7 @@ kotlin {
         }
 
         jvmMain.dependencies {
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
             implementation("org.xerial:sqlite-jdbc:3.50.3.0")
             implementation("org.slf4j:slf4j-nop:2.0.17")
             implementation("com.squareup.wire:wire-moshi-adapter:6.2.0")
@@ -30,7 +31,6 @@ kotlin {
 
             dependencies {
                 implementation("org.junit.jupiter:junit-jupiter-api:5.11.4")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
             }
         }
     }

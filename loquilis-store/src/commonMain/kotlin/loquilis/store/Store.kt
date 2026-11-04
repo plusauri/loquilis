@@ -46,6 +46,9 @@ interface Store : BlobSink, AutoCloseable {
     fun turns(conversationId: String, branchId: String, offset: Int, limit: Int): List<TurnSummary>
     fun turnCount(conversationId: String, branchId: String): Int
 
+    /** The ordinal of the turn holding entry [seq], or 0 for an entry before the first turn. */
+    fun turnOf(conversationId: String, branchId: String, seq: Long): Int
+
     /** Recomputes the derived turn rows from entries. */
     fun rebuildTurns(conversationId: String)
 

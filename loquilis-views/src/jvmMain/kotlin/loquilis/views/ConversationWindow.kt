@@ -1,4 +1,4 @@
-package loquilis.app
+package loquilis.views
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,20 +26,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** The review window: one take, two views of it, and the inspector showing the selected entry. */
+/** One conversation from a library: three views of it, and the inspector showing the selected entry. */
 @Composable
-fun ReviewApp(state: ReviewState) {
+fun ConversationWindow(state: ConversationState) {
     val palette = LocalPalette.current
-    val messagesList = remember { LazyListState() }
-    val treeList = remember { LazyListState() }
+    val messagesList = remember(state.pager) { LazyListState() }
+    val treeList = remember(state.pager) { LazyListState() }
 
     Column(Modifier.fillMaxSize().background(palette.page)) {
         TopBar(state)
         Row(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (state.view) {
-                    ReviewView.Messages -> MessagesView(state, messagesList)
-                    ReviewView.Tree -> TreeView(state, treeList)
+                    ConversationView.Messages -> MessagesView(state, messagesList)
+                    ConversationView.Tree -> TreeView(state, treeList)
+                    ConversationView.Search -> SearchView(state)
                 }
             }
             Box(Modifier.width(1.dp).fillMaxHeight().background(palette.line))
@@ -49,7 +50,7 @@ fun ReviewApp(state: ReviewState) {
 }
 
 @Composable
-private fun TopBar(state: ReviewState) {
+private fun TopBar(state: ConversationState) {
     val palette = LocalPalette.current
     Column {
         Row(
@@ -57,48 +58,48 @@ private fun TopBar(state: ReviewState) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text(state.take.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = palette.ink)
-                Text(takeLine(state), fontSize = 12.sp, color = palette.muted)
+                Text(state.pager.conversation.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = palette.ink)
+                Text(summaryLine(state.pager), fontSize = 12.sp, color = palette.muted)
             }
             Spacer(Modifier.weight(1f))
-            ViewSwitch(state)
+            Segments(ConversationView.entries, state.view, { it.label }, state::show)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(palette.line))
     }
 }
 
-private fun takeLine(state: ReviewState): String = buildList {
-    state.take.session?.let { session ->
-        add(session.model.ifBlank { "unknown model" })
-        if (session.cliVersion.isNotBlank()) add("Claude Code ${session.cliVersion}")
+private fun summaryLine(pager: ConversationPager): String = buildList {
+    val conversation = pager.conversation
+    conversation.agent?.let { agent ->
+        add(agent.reported_model.ifBlank { "unknown model" })
+        if (agent.cli_version.isNotBlank()) add("Claude Code ${agent.cli_version}")
     }
-    add("${state.turnCount} turns")
-    add("${state.take.entries.size} entries")
-    add("${state.take.rawLines.size} raw lines")
-    add(money(state.totalCostMicroUsd))
-    add("read-only replay")
+    add("${pager.turnCount} turns")
+    add("${pager.entryCount} entries")
+    add("${pager.rawCount} raw lines")
+    conversation.total_usage?.let { add(money(it.cost_micro_usd)) }
+    add("read-only")
 }.joinToString(" · ")
 
+/** A row of mutually exclusive choices. */
 @Composable
-private fun ViewSwitch(state: ReviewState) {
+internal fun <T> Segments(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
     val palette = LocalPalette.current
     Row(
         Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, palette.line, RoundedCornerShape(8.dp)),
         horizontalArrangement = Arrangement.spacedBy(0.dp),
     ) {
-        ReviewView.entries.forEach { view ->
-            val on = state.view == view
+        options.forEach { option ->
+            val on = option == selected
             Text(
-                view.label,
+                label(option),
                 color = if (on) palette.userInk else palette.ink,
                 fontSize = 13.sp,
                 modifier = Modifier
                     .background(if (on) palette.accent else palette.page)
-                    .clickable { state.show(view) }
+                    .clickable { onSelect(option) }
                     .padding(horizontal = 14.dp, vertical = 6.dp),
             )
         }
     }
 }
-
-

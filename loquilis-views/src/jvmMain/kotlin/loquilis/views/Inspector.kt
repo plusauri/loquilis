@@ -1,4 +1,4 @@
-package loquilis.app
+package loquilis.views
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +13,8 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -22,39 +24,44 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import loquilis.core.isStored
 import loquilis.model.Content
-import loquilis.model.Entry
 
-/** Past this, a body is cut for showing. The take itself still holds all of it. */
+/** Past this, a body is cut for showing. The store still holds all of it. */
 private const val SHOWN_CHARS = 60_000
 
 /** The selected entry as the model holds it, next to the agent's lines it came from. */
 @Composable
-fun Inspector(state: ReviewState, modifier: Modifier) {
+fun Inspector(state: ConversationState, modifier: Modifier) {
     val palette = LocalPalette.current
-    val entry = state.selectedId?.let { state.take.byId[it] }
+    val id = state.selectedId
+    val seen by produceState<Inspection?>(null, id, state.pager) {
+        value = id?.let { withContext(Dispatchers.IO) { state.pager.inspect(it) } }
+    }
+    val inspection = seen
     Box(modifier) {
-        if (entry == null) {
-            Text(
-                "Select anything in the conversation to see its entry and the raw lines it came from.",
-                color = palette.muted,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(16.dp),
-            )
+        if (id == null || inspection == null) {
+            if (id == null) {
+                Text(
+                    "Select anything in the conversation to see its entry and the raw lines it came from.",
+                    color = palette.muted,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(16.dp),
+                )
+            }
         } else {
+            val entry = inspection.entry
             val scroll = remember(entry.id) { androidx.compose.foundation.ScrollState(0) }
             Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(kindLabel(entry), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = palette.ink)
-                Fields(entry, state)
-                bodyContent(entry)?.let { (label, content) -> Body(label, content, state) }
-                state.take.resultOf(entry)?.let { result ->
-                    Body("Result", result.body?.tool_result?.output, state)
-                }
-                val raw = state.take.rawOf(entry)
+                Fields(inspection, state)
+                inspection.sections.forEach { Code("${it.label} · ${where(it.content, it.text)}", it.text) }
+                val raw = inspection.raw
                 if (raw.isNotEmpty()) Code("Raw (${raw.size})", raw.joinToString("\n\n", transform = ::pretty))
             }
         }
@@ -62,8 +69,9 @@ fun Inspector(state: ReviewState, modifier: Modifier) {
 }
 
 @Composable
-private fun Fields(entry: Entry, state: ReviewState) {
-    val parent = state.take.byId[entry.parent_id]
+private fun Fields(inspection: Inspection, state: ConversationState) {
+    val entry = inspection.entry
+    val parent = inspection.parent
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Field("seq", entry.seq.toString())
         Field("id", entry.id)
@@ -95,12 +103,6 @@ private fun Field(name: String, value: String, onClick: (() -> Unit)? = null) {
             modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
         )
     }
-}
-
-@Composable
-private fun Body(label: String, content: Content?, state: ReviewState) {
-    val text = state.take.text(content)
-    Code("$label · ${where(content, text)}", text)
 }
 
 @Composable

@@ -1,4 +1,4 @@
-package loquilis.app
+package loquilis.views
 
 import loquilis.core.EntryKind
 import loquilis.core.kind
@@ -9,14 +9,16 @@ import loquilis.model.EntryState
 import loquilis.model.TextRole
 import loquilis.model.ToolKind
 import loquilis.model.TurnResult
+import loquilis.model.TurnSummary
 import loquilis.model.Visibility
+import loquilis.store.Store
 
 /**
  * Both views are plain functions of the same entries, so neither owns any data and switching between
  * them loses nothing. Everything here is free of Compose, which is what lets the tests pin it.
  */
 
-/** One row of the Messages view. [turn] counts user messages; rows before the first are turn 0. */
+/** One row of the Messages view. [turn] is the turn's ordinal; rows before the first user message are turn 0. */
 sealed interface MessageRow {
     val key: String
     val turn: Int
@@ -49,16 +51,16 @@ sealed interface MessageRow {
 }
 
 /**
- * Lays entries out as a chat. Private entries (the agent's thinking) are left out, as the model says
+ * Lays entries out as a chat, counting turns on from [firstTurn]. Private entries (the agent's thinking) are left out, as the model says
  * they are by default; every other entry lands on exactly one row.
  */
-fun messagesOf(entries: List<Entry>): List<MessageRow> {
+fun messagesOf(entries: List<Entry>, firstTurn: Int = 0): List<MessageRow> {
     val resultsByCall = entries.mapNotNull { e -> e.body?.tool_result?.let { it.call_id to e } }.toMap()
     val calledIds = entries.mapNotNull { it.body?.tool_call?.call_id }.toSet()
     val byId = entries.associateBy { it.id }
     val rows = mutableListOf<MessageRow>()
 
-    var turn = 0
+    var turn = firstTurn
     val steps = mutableListOf<MessageRow.Step>()
     val closing = mutableListOf<MessageRow>()
 
@@ -257,4 +259,28 @@ fun bytes(size: Long): String = when {
     size < 1024 -> "$size B"
     size < 1024 * 1024 -> "%.1f KB".format(size / 1024.0)
     else -> "%.1f MB".format(size / (1024.0 * 1024.0))
+}
+
+/** What a closed turn's tree line says about the work inside it. */
+fun turnTag(turn: TurnSummary?): String? = turn?.let {
+    listOfNotNull(
+        plural(it.tool_call_count, "call", "calls").takeIf { _ -> it.tool_call_count > 0 },
+        "${it.error_count} failed".takeIf { _ -> it.error_count > 0 },
+    ).joinToString(" · ").ifEmpty { null }
+}
+
+/** Splits a search snippet into plain and matched runs, in order. */
+fun snippetRuns(snippet: String): List<Pair<String, Boolean>> = buildList {
+    var rest = snippet
+    while (rest.isNotEmpty()) {
+        val open = rest.indexOf(Store.MATCH_OPEN)
+        if (open < 0) {
+            add(rest to false)
+            break
+        }
+        val close = rest.indexOf(Store.MATCH_CLOSE, open).let { if (it < 0) rest.length else it }
+        if (open > 0) add(rest.substring(0, open) to false)
+        add(rest.substring(open + 1, close) to true)
+        rest = rest.substring((close + 1).coerceAtMost(rest.length))
+    }
 }

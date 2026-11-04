@@ -1,4 +1,4 @@
-package loquilis.app
+package loquilis.views
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,12 +14,12 @@ import loquilis.model.Thinking
 import loquilis.model.ToolCall
 import loquilis.model.ToolKind
 import loquilis.model.ToolResult
+import loquilis.model.TurnSummary
 import loquilis.model.UserMessage
 import loquilis.model.Visibility
+import loquilis.store.Store
 
 class ProjectionTest {
-    private val take by lazy { loadBundledTake() }
-
     private var seq = 0L
     private fun entry(id: String, parent: String, body: EntryBody, state: EntryState = EntryState.ENTRY_STATE_COMPLETE, visibility: Visibility = Visibility.VISIBILITY_NORMAL) =
         Entry(id = id, seq = ++seq, parent_id = parent, body = body, state = state, visibility = visibility)
@@ -40,21 +40,6 @@ class ProjectionTest {
             is MessageRow.Step -> listOfNotNull(row.entry.id, row.result?.id)
             is MessageRow.Work -> emptyList()
         }
-    }
-
-    @Test
-    fun theRecordedTakeHasOneUserRowForEachTurn() {
-        val rows = messagesOf(take.entries)
-        assertEquals(7, rows.count { it is MessageRow.Said })
-        assertEquals(7, rows.count { it is MessageRow.Footer })
-        assertTrue(rows.count { it is MessageRow.Reply } >= 7)
-    }
-
-    @Test
-    fun messagesShowEveryEntryOnceExceptPrivateOnes() {
-        val shown = idsOf(messagesOf(take.entries))
-        val expected = take.entries.filter { it.visibility != Visibility.VISIBILITY_PRIVATE }.map { it.id }
-        assertEquals(expected.sorted(), shown.sorted())
     }
 
     @Test
@@ -113,8 +98,8 @@ class ProjectionTest {
 
     @Test
     fun theTreeHoldsEveryEntryOnce() {
-        val rows = treeOf(take.entries)
-        assertEquals(take.entries.map { it.id }.sorted(), rows.map { it.entry.id }.sorted())
+        val rows = treeOf(Fixture.entries)
+        assertEquals(Fixture.entries.map { it.id }.sorted(), rows.map { it.entry.id }.sorted())
     }
 
     @Test
@@ -130,7 +115,7 @@ class ProjectionTest {
 
     @Test
     fun theRecordedTakesTurnsAreAllAtTheTop() {
-        val rows = treeOf(take.entries)
+        val rows = treeOf(Fixture.entries)
         assertEquals(setOf(0), rows.filter { it.entry.body?.user_message != null }.map { it.depth }.toSet())
         assertTrue(rows.maxOf { it.depth } <= 3, "depth stayed small")
     }
@@ -178,9 +163,22 @@ class ProjectionTest {
     }
 
     @Test
-    fun everyFactInTheRecordedTakeHasItsRawLines() {
-        val parsed = take.entries.filter { it.raw != null }
-        assertTrue(parsed.isNotEmpty())
-        assertTrue(parsed.all { take.rawOf(it).isNotEmpty() })
+    fun turnsCountOnFromTheFirstTurnGiven() {
+        val rows = messagesOf(listOf(user("u", ""), reply("a", "u")), firstTurn = 41)
+        assertEquals(setOf(42), rows.map { it.turn }.toSet())
+    }
+
+    @Test
+    fun aSnippetSplitsIntoPlainAndMatchedRuns() {
+        val snippet = "before ${Store.MATCH_OPEN}hit${Store.MATCH_CLOSE} after ${Store.MATCH_OPEN}two${Store.MATCH_CLOSE}"
+        assertEquals(listOf("before " to false, "hit" to true, " after " to false, "two" to true), snippetRuns(snippet))
+        assertEquals(listOf("no match" to false), snippetRuns("no match"))
+    }
+
+    @Test
+    fun aClosedTurnsTagCountsItsWork() {
+        assertEquals("3 calls · 1 failed", turnTag(TurnSummary(tool_call_count = 3, error_count = 1)))
+        assertEquals(null, turnTag(TurnSummary()))
+        assertEquals(null, turnTag(null))
     }
 }

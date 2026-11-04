@@ -375,4 +375,43 @@ class SqliteStoreTest {
     private fun count(sql: String): Int = DriverManager.getConnection("jdbc:sqlite:$path").use { c ->
         c.createStatement().executeQuery(sql).use { it.next(); it.getInt(1) }
     }
+
+    @Test
+    fun anEntryFindsItsTurn() {
+        recorded(dir.resolve("turn-of.sqlite")).use { store ->
+            val branch = store.conversation(CONVERSATION)!!.main_branch_id
+            for (turn in store.turns(CONVERSATION, branch, 0, 100)) {
+                assertEquals(turn.ordinal, store.turnOf(CONVERSATION, branch, turn.first_seq))
+                assertEquals(turn.ordinal, store.turnOf(CONVERSATION, branch, turn.last_seq))
+            }
+            assertEquals(0, store.turnOf(CONVERSATION, branch, 0))
+        }
+    }
+
+    @Test
+    fun aTransactionReadsTheConversationItWrote() {
+        SqliteStore.open(dir.resolve("in-transaction.sqlite")).use { store ->
+            store.transaction {
+                store.putConversation(conversation())
+                assertEquals("A take", store.conversation(CONVERSATION)?.title)
+            }
+        }
+    }
+
+    @Test
+    fun recordingATakeInOneTransactionMatchesRecordingItLineByLine() {
+        val path = dir.resolve("import.sqlite")
+        recorded(dir.resolve("lines.sqlite")).use { lines ->
+            SqliteStore.open(path).use { store ->
+                fun open(name: String) = checkNotNull(javaClass.getResourceAsStream("/fixtures/claude-take/$name")) { name }
+                val id = recordTake(store, open("conversation.json"), open("raw.jsonl.gz"))
+                val imported = store.conversation(id)!!
+                val direct = lines.conversation(CONVERSATION)!!
+                assertEquals(direct.total_usage, imported.total_usage)
+                assertEquals(direct.agent?.reported_model, imported.agent?.reported_model)
+                assertEquals(lines.lastSeq(CONVERSATION), store.lastSeq(id))
+                assertEquals(lines.rawCount(CONVERSATION), store.rawCount(id))
+            }
+        }
+    }
 }

@@ -23,4 +23,5 @@ rootProject.name = "loquilis"
 include(":loquilis-model")
 include(":loquilis-agents")
 include(":loquilis-store")
+include(":loquilis-views")
 include(":app")

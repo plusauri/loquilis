@@ -1,4 +1,4 @@
-package loquilis.app
+package loquilis.views
 
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -21,9 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,13 +38,12 @@ import loquilis.model.Entry
 import loquilis.model.EntryState
 
 @Composable
-fun MessagesView(state: ReviewState, list: LazyListState) {
-    val rows by remember(state) { derivedStateOf { state.visibleMessages() } }
+fun MessagesView(state: ConversationState, list: LazyListState) {
+    val pager = state.pager
 
     LaunchedEffect(Unit) {
-        val id = state.selectedId ?: return@LaunchedEffect
-        val at = rows.indexOfFirst { state.holds(it, id) }
-        if (at >= 0) list.scrollToItem(at)
+        val at = state.selectedId?.let(state::messageIndex) ?: return@LaunchedEffect
+        list.scrollToItem(at)
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -55,20 +53,49 @@ fun MessagesView(state: ReviewState, list: LazyListState) {
             contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            items(rows, key = { it.key }) { row ->
-                val selected = state.selectedId?.let { state.holds(row, it) } ?: false
-                val select = { id: String -> state.selectedId = id }
-                when (row) {
-                    is MessageRow.Said -> UserBubble(state.take.text(row.entry.body?.user_message?.text), selected) { select(row.entry.id) }
-                    is MessageRow.Reply -> AgentBubble(state.take.text(row.entry.body?.agent_text?.text), selected) { select(row.entry.id) }
-                    is MessageRow.Work -> WorkFold(row, row.turn in state.openTurns) { state.toggleTurn(row.turn) }
-                    is MessageRow.Step -> StepLine(row, selected) { select(row.entry.id) }
-                    is MessageRow.Note -> NoteLine(row.entry, selected) { select(row.entry.id) }
-                    is MessageRow.Footer -> TurnFooter(row, selected) { select(row.entry.id) }
-                }
-            }
+            turnItems(
+                first = pager.firstOrdinal,
+                last = pager.lastOrdinal,
+                open = state.openTurns.keys,
+                closed = { ClosedTurn(state, it) },
+                opened = { ordinal ->
+                    val turn = checkNotNull(state.openTurns[ordinal])
+                    items(turn.messages, key = { it.key }) { row -> TurnRow(state, turn, row) }
+                },
+            )
         }
         VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+    }
+}
+
+/** A closed turn, drawn from its summary until its entries arrive. */
+@Composable
+private fun ClosedTurn(state: ConversationState, ordinal: Int) {
+    val turn by rememberTurn(state.pager, ordinal)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val loaded = turn
+        if (loaded != null) {
+            loaded.messages.filter { it !is MessageRow.Step }.forEach { TurnRow(state, loaded, it) }
+        } else {
+            state.pager.summary(ordinal)?.let { summary ->
+                UserBubble(summary.user_head, false) {}
+                if (summary.reply_head.isNotEmpty()) AgentBubble(summary.reply_head, false) {}
+            }
+        }
+    }
+}
+
+@Composable
+private fun TurnRow(state: ConversationState, turn: LoadedTurn, row: MessageRow) {
+    val selected = state.selectedId?.let { state.holds(row, it) } ?: false
+    val select = { id: String -> state.selectedId = id }
+    when (row) {
+        is MessageRow.Said -> UserBubble(turn.text(row.entry), selected) { select(row.entry.id) }
+        is MessageRow.Reply -> AgentBubble(turn.text(row.entry), selected) { select(row.entry.id) }
+        is MessageRow.Work -> WorkFold(row, row.turn in state.openTurns) { state.toggleTurn(turn) }
+        is MessageRow.Step -> StepLine(row, selected) { select(row.entry.id) }
+        is MessageRow.Note -> NoteLine(row.entry, selected) { select(row.entry.id) }
+        is MessageRow.Footer -> TurnFooter(row, selected) { select(row.entry.id) }
     }
 }
 
