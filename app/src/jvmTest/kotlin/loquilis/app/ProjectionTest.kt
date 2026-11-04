@@ -4,7 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import loquilis.kit.inlineContent
+import loquilis.core.inlineContent
 import loquilis.model.AgentText
 import loquilis.model.Entry
 import loquilis.model.EntryBody

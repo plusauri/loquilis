@@ -4,7 +4,7 @@
 # Not yet wired into CI; see doc/design/conversation-model.md, "Schema discipline".
 version: v2
 modules:
-  - path: kit-model/protobuf
+  - path: loquilis-model/protobuf
 lint:
   use:
     - STANDARD

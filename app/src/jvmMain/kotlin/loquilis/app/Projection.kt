@@ -1,8 +1,8 @@
 package loquilis.app
 
-import loquilis.kit.EntryKind
-import loquilis.kit.kind
-import loquilis.kit.preview
+import loquilis.core.EntryKind
+import loquilis.core.kind
+import loquilis.core.preview
 import loquilis.model.Content
 import loquilis.model.Entry
 import loquilis.model.EntryState

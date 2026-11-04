@@ -14,18 +14,18 @@ import loquilis.agents.AgentParser
 import loquilis.agents.ClaudeStreamParser
 import loquilis.agents.ParseOutput
 import loquilis.agents.SessionInfo
-import loquilis.kit.BlobSink
-import loquilis.kit.ContentFactory
-import loquilis.kit.blobRefOf
-import loquilis.kit.kind
-import loquilis.kit.EntryKind
+import loquilis.core.BlobSink
+import loquilis.core.ContentFactory
+import loquilis.core.blobRefOf
+import loquilis.core.kind
+import loquilis.core.EntryKind
 import loquilis.model.BlobRef
 import loquilis.model.Content
 import loquilis.model.Entry
 import okio.ByteString
 
 /**
- * A recorded take, replayed through the real parser and held in memory: the stand-in for kit-store
+ * A recorded take, replayed through the real parser and held in memory: the stand-in for loquilis-store
  * while there is no store. It holds raw lines too, so the review window can show what each entry
  * was parsed from.
  */

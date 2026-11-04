@@ -15,10 +15,10 @@ kotlin {
     sourceSets {
         jvmMain {
             // The window opens the same recorded take the parser is tested on, with no second copy.
-            resources.srcDir("../kit-agents/src/jvmTest/resources")
+            resources.srcDir("../loquilis-agents/src/jvmTest/resources")
 
             dependencies {
-                implementation(project(":kit-agents"))
+                implementation(project(":loquilis-agents"))
                 implementation(compose.desktop.currentOs)
                 implementation(compose.foundation)
                 implementation(compose.material3)

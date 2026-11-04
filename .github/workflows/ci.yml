@@ -18,11 +18,11 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Test
-        run: ./gradlew :kit-model:jvmTest :kit-agents:jvmTest :kit-store:jvmTest :app:jvmTest
+        run: ./gradlew :loquilis-model:jvmTest :loquilis-agents:jvmTest :loquilis-store:jvmTest :app:jvmTest
       - name: Generated code matches the protos
         run: |
-          ./gradlew :kit-model:generateCommonMainProtos
-          git diff --exit-code -- kit-model/src/commonMain/kotlin/loquilis/model
+          ./gradlew :loquilis-model:generateCommonMainProtos
+          git diff --exit-code -- loquilis-model/src/commonMain/kotlin/loquilis/model
       - uses: bufbuild/buf-setup-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

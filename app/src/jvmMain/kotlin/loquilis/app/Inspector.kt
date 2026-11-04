@@ -25,7 +25,7 @@ import java.time.format.DateTimeFormatter
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-import loquilis.kit.isStored
+import loquilis.core.isStored
 import loquilis.model.Content
 import loquilis.model.Entry
 

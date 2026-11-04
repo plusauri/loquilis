@@ -1,6 +1,6 @@
 # Conversation model and storage
 
-- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `kit-model/protobuf/loquilis/model/v1/`, `kit-model` and `kit-agents` (Claude) are built and tested. `kit-store` is built and tested. `app` is a read-only review window over a recorded take, held in memory, and does not read the store yet. `kit-views` is not started.
+- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `loquilis-model/protobuf/loquilis/model/v1/`, `loquilis-model` and `loquilis-agents` (Claude) are built and tested. `loquilis-store` is built and tested. `app` is a read-only review window over a recorded take, held in memory, and does not read the store yet. `loquilis-views` is not started.
 - Rule this works under: `doc/decisions/0001-dependency-direction.md` (no dependency on Tutilis).
 
 ## What the model has to do
@@ -46,11 +46,11 @@ As in Tutilis, the model is **defined in `.proto` files** and Kotlin is generate
 
 - **Other languages can take part.** The same files generate TypeScript (a web viewer, the Cogilis player), Python (analysis scripts), Swift and Go, with no second hand-written model to drift.
 - **The data lasts for years.** Conversations live in libraries and in git records repos. Protobuf's rules (never reuse a field number, mark retired fields `reserved`, add fields freely) are the discipline that kind of data needs.
-- **Extensions are typed and travel across languages.** An app built on the kit defines its own messages and attaches them as `Extension` (a type URL and the encoded bytes). The kit stores them and round-trips them without reading them, and any language that has the extending app's `.proto` can decode them.
+- **Extensions are typed and travel across languages.** An app built on Loquilis defines its own messages and attaches them as `Extension` (a type URL and the encoded bytes). Loquilis stores them and round-trips them without reading them, and any language that has the extending app's `.proto` can decode them.
 
 ### The files
 
-All in `kit-model/protobuf/loquilis/model/v1/`, package `loquilis.model.v1`, Kotlin package `loquilis.model`.
+All in `loquilis-model/protobuf/loquilis/model/v1/`, package `loquilis.model.v1`, Kotlin package `loquilis.model`.
 
 | File | Messages |
 |---|---|
@@ -94,12 +94,12 @@ The first draft used `Any`. A test found the flaw: proto3-JSON writes an `Any` b
 - **Times are `google.protobuf.Timestamp`**, and durations are `google.protobuf.Duration`. Wire maps them to `Instant` and `Duration`.
 - **Money is `int64 cost_micro_usd`**, so totals add up exactly.
 - **Every enum's zero value is `*_UNSPECIFIED`**, so an unset field never reads as a real value.
-- **An entry names the agent's own tool name and also the kit's reading of it** (`tool` and `ToolKind`). A wrong reading loses nothing.
+- **An entry names the agent's own tool name and also Loquilis's reading of it** (`tool` and `ToolKind`). A wrong reading loses nothing.
 - **Field 15 is `extensions`** on `Conversation`, `Entry` and `Branch`, by convention.
 
 ### The Kotlin layer
 
-Wire generates immutable classes. The hand-written layer is small, and it lives in `kit-model` beside the generated code:
+Wire generates immutable classes. The hand-written layer is small, and it lives in `loquilis-model` beside the generated code:
 
 - **A sealed view over `EntryBody`.** Wire represents a `oneof` as nullable fields, so the layer adds `val EntryBody.kind: EntryKind`, which lets code use an exhaustive `when`. `EntryKind.Unknown` is a real case: a kind from a newer schema decodes to it and keeps its bytes. `AppCommand.kind` does the same for commands.
 - **Typed extension access.** `ExtensionKey<M>` gives `entry.ext(key)` and `entry.withExt(key, value)` over the `Extension` list.
@@ -150,10 +150,10 @@ There is one default library, and **File → Open Library** opens another, as in
 
 | Module | Depends on | Holds |
 |---|---|---|
-| `kit-model` | Wire runtime only | The `.proto` files, the generated Kotlin, and the thin Kotlin layer. Pure, `commonMain`. |
-| `kit-store` | `kit-agents`, sqlite | `Store` (append, page, search, blobs, raw events), migrations, export/import, and `Recorder`/`recover`, which need the parser seam. |
-| `kit-agents` | `kit-model` | The `AgentAdapter` seam, `ClaudeLiveAdapter` (stream-json on stdin) and `GrokResumeAdapter`, each with a fixture test. |
-| `kit-views` | `kit-model`, `kit-store`, Compose | `ConversationViewModel` (paging, cache, live updates), and the Messages view (user on the right, agent on the left), the Tree view and the Search view. |
+| `loquilis-model` | Wire runtime only | The `.proto` files, the generated Kotlin, and the thin Kotlin layer. Pure, `commonMain`. |
+| `loquilis-store` | `loquilis-agents`, sqlite | `Store` (append, page, search, blobs, raw events), migrations, export/import, and `Recorder`/`recover`, which need the parser seam. |
+| `loquilis-agents` | `loquilis-model` | The `AgentAdapter` seam, `ClaudeLiveAdapter` (stream-json on stdin) and `GrokResumeAdapter`, each with a fixture test. |
+| `loquilis-views` | `loquilis-model`, `loquilis-store`, Compose | `ConversationViewModel` (paging, cache, live updates), and the Messages view (user on the right, agent on the left), the Tree view and the Search view. |
 | `app` | all of the above | A window, the library picker, and settings. Kept thin. |
 
 ## Agents

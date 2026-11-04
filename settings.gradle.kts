@@ -20,7 +20,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "loquilis"
 
-include(":kit-model")
-include(":kit-agents")
-include(":kit-store")
+include(":loquilis-model")
+include(":loquilis-agents")
+include(":loquilis-store")
 include(":app")

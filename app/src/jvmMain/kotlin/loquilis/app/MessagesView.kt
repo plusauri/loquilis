@@ -32,8 +32,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import loquilis.kit.EntryKind
-import loquilis.kit.kind
+import loquilis.core.EntryKind
+import loquilis.core.kind
 import loquilis.model.Content
 import loquilis.model.Entry
 import loquilis.model.EntryState
