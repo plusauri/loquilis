@@ -19,3 +19,4 @@ dependencyResolutionManagement {
 rootProject.name = "loquilis"
 
 include(":kit-model")
+include(":kit-agents")

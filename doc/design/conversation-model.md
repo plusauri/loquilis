@@ -1,6 +1,6 @@
 # Conversation model and storage
 
-- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `kit-model/protobuf/loquilis/model/v1/`, and `kit-model` generates, builds and is tested. `kit-store`, `kit-agents`, `kit-views` and `app` are not started.
+- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `kit-model/protobuf/loquilis/model/v1/`, `kit-model` and `kit-agents` (Claude) are built and tested. `kit-store`, `kit-views` and `app` are not started.
 - Rule this works under: `doc/decisions/0001-dependency-direction.md` (no dependency on Tutilis).
 
 ## What the model has to do
@@ -38,7 +38,7 @@ These are requirements, not code. A Cogilis take must import into Loquilis with 
 | T9 | Engine calls, disclaimer flag, emotion, beat id, asks-for, character, lesson, plan, script, panel, door | **Extensions**: messages in Tutilis's own `.proto` (`tutilis.cogilis.v1.*`), held in `Extension`. None of them is core. |
 | T10 | A `schema` version and tolerant reads | Protobuf evolution rules, `buf breaking`, and `ExportManifest.schema`. |
 | T11 | Derived renderings (`transcript.md`, player timeline) are pure functions over the record | The views and exporters read through the same model API, and nothing derived is stored as truth. |
-| T12 | Thinking blocks are dropped, because Cogilis records are public | Loquilis keeps thinking as `Thinking` with `VISIBILITY_PRIVATE`. It is hidden by default and dropped by exports unless asked for. |
+| T12 | Thinking blocks are dropped, because Cogilis records are public | Loquilis keeps thinking as `Thinking` with `VISIBILITY_PRIVATE`. It is hidden by default and dropped by exports unless asked for. In the recorded streams, most thinking blocks are empty (a signature only), and those make no entry. |
 
 ## Modeling: protobuf is the source of truth
 
@@ -67,10 +67,10 @@ All in `kit-model/protobuf/loquilis/model/v1/`, package `loquilis.model.v1`, Kot
 | `EntryBody` kind | Author | What it is |
 |---|---|---|
 | `UserMessage` | user | A message the user sent, with attachments. It starts a turn. |
-| `AgentText` | agent | Text the agent wrote: `NARRATION` between tool calls, or the `REPLY` that ends the turn. |
+| `AgentText` | agent, or system | Text the agent wrote: `NARRATION` between tool calls, or the `REPLY` that ends the turn. `INJECTED` is text the harness put in, such as an expanded skill prompt. |
 | `Thinking` | agent | The agent's reasoning, private by default. |
-| `ToolCall` | agent | A tool the agent called: the tool's own name, its `ToolKind`, the exact input, and the target path for file tools. |
-| `ToolResult` | tool | Its full output, the error flag, and how long it took. Its parent is the `ToolCall`. |
+| `ToolCall` | agent | A tool the agent called: the tool's own name, its `ToolKind`, the exact input, the target path for file tools, and the agent's description of the call. |
+| `ToolResult` | tool | Its full output, the error flag, how long it took, and any images the tool returned. Its parent is the `ToolCall`. |
 | `Artifact` | tool | A chart, table, image, document or file the agent made. Its parent is the `ToolCall` that made it. |
 | `SubAgent` | agent | A nested run. The subagent's entries are its children. |
 | `AppCommand` | app | Anything the app sent other than a message. |
@@ -156,10 +156,35 @@ There is one default library, and **File → Open Library** opens another, as in
 | `kit-views` | `kit-model`, `kit-store`, Compose | `ConversationViewModel` (paging, cache, live updates), and the Messages view (user on the right, agent on the left), the Tree view and the Search view. |
 | `app` | all of the above | A window, the library picker, and settings. Kept thin. |
 
+## Agents
+
+`AgentParser` turns one agent's stream into entries, a line at a time, so a live turn and a re-parse of stored raw events run the same code. It gives `Append` and `Update` outputs, because an entry can change after it is written: a tool call completes, and text becomes the reply only when the turn ends. `ContentFactory` decides inline or blob for every piece of text, so no adapter can disagree about the threshold.
+
+`ClaudeLiveSession` runs one `claude` process with messages on stdin, and it emits each raw line before what was parsed from it, which is the order the store must keep. It sends one message per turn: a message sent mid-turn waits, and it is recorded when it goes to the agent. Otherwise a turn's entries would interleave with the next one's. Messages that never went out are reported in `Ended.unsent`.
+
+**What Claude's stream showed** (Claude Code 2.1.x, read across 80 turns of recorded sessions):
+
+- The user's message is not echoed, so the app records it.
+- One API message arrives as several `assistant` events, one block each.
+- Which text is the reply is only known at the `result`.
+- `total_cost_usd` is cumulative over a session, while `usage` covers one turn.
+- Tool results can hold images, which the parser sends to the blob store.
+- `tool_progress`, `thinking_tokens`, `task_*` and allowed `rate_limit_event` lines are telemetry. They stay in the raw log and make no entry.
+
+### Known gaps
+
+- **Artifacts are not captured yet.** The stream says a tool ran, not what files it left behind. Cogilis finds figures by looking at the workspace, so Loquilis needs a workspace watcher, or the Tutilis-side importer has to supply them. Until then, nothing creates `Artifact` entries, and T8 is unproven. The fixture take has no figures.
+- **`AppCommand` is not sent yet.** Interrupts and permission prompts go over Claude's control protocol, which no recorded stream shows. `PermissionRequest` and `Interrupt` stay unused until that is read and tested.
+- **Text does not stream by the word.** The session gets whole blocks. Word-by-word text needs `--include-partial-messages` and handling for its events.
+- **Attachments are not sent.** `send` takes text only.
+- **Subagents are tested on hand-written lines only.** No recorded stream has one.
+- **Grok is not started.** `GrokResumeAdapter` is next after the store, or sooner if a second agent should test the seam.
+
 ## Tests that prove the model
 
-- **Fixture round trip:** each recorded transcript (Claude stream-json, Grok streaming-json) goes raw → entries → export → import → identical entries.
-- **Cogilis parity:** a public Cogilis take (from a lesson plan) maps to entries with every step, output, figure and timestamp accounted for, and the Cogilis-only fields carried in extensions. This is the proof for rule 0001.
+- **Fixture round trip** (needs `kit-store`): each recorded transcript (Claude stream-json, Grok streaming-json) goes raw → entries → export → import → identical entries.
+- **Cogilis parity** (`ClaudeParityTest`): a real Cogilis take, replayed from its raw stream, has every turn, step, input, output head, reply, duration, cost and timestamp its record holds. This is the proof for rule 0001. Figures and the Cogilis-only extensions are not covered yet.
+- **A real session** (`theRealClaudeKeepsContextAcrossMessages`, `LOQUILIS_LIVE=1`): one short exchange with the real `claude`, opt-in because it costs money.
 - **Scale:** a synthetic conversation of 100k entries and 1 GB of output. Opening it, scrolling to the middle and searching it each stay within a fixed time and memory budget, asserted in the test.
 - **Crash:** kill the writer mid-stream, reopen, and the entries rebuilt from raw events match.
 - **Schema:** `buf lint` and `buf breaking`, plus the column-to-proto check.

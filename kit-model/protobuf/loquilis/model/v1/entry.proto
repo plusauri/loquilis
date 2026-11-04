@@ -114,6 +114,9 @@ enum TextRole {
   TEXT_ROLE_NARRATION = 1;
   // The answer that ends the turn.
   TEXT_ROLE_REPLY = 2;
+  // Text the agent's harness put into the conversation, such as an expanded skill prompt. The model
+  // reads it, but neither the user nor the model wrote it. Author is AUTHOR_SYSTEM.
+  TEXT_ROLE_INJECTED = 3;
 }
 
 // The agent's reasoning, when the agent exposes it. Stored with [VISIBILITY_PRIVATE].
@@ -134,6 +137,8 @@ message ToolCall {
   // The file the call reads or writes, for file tools. Lifted out of [input] so views and search
   // need not parse it.
   string target_path = 5;
+  // What the agent says the call is for, when it gives one: "Run the test suite".
+  string description = 6;
 }
 
 // The kit's reading of what a tool does. Views group and show calls by kind; [ToolCall.tool] is
@@ -159,6 +164,9 @@ message ToolResult {
   bool is_error = 3;
   // From the call to the result, when both times are known.
   google.protobuf.Duration elapsed = 4;
+  // Images the tool returned to the model, such as a screenshot it read. These are what the agent
+  // saw, not things it made, so they are not [Artifact]s. [output] marks each one's place.
+  repeated BlobRef images = 5;
 }
 
 // Something the agent made that a person would want to look at: a chart, a table, an image, a

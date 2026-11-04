@@ -17,6 +17,8 @@ import com.squareup.wire.ReverseProtoWriter
 import com.squareup.wire.Syntax.PROTO_3
 import com.squareup.wire.WireField
 import com.squareup.wire.`internal`.JvmField
+import com.squareup.wire.`internal`.immutableCopyOf
+import com.squareup.wire.`internal`.redactElements
 import com.squareup.wire.`internal`.sanitize
 import kotlin.Any
 import kotlin.AssertionError
@@ -28,6 +30,7 @@ import kotlin.Long
 import kotlin.Nothing
 import kotlin.String
 import kotlin.Suppress
+import kotlin.collections.List
 import okio.ByteString
 
 /**
@@ -67,8 +70,21 @@ public class ToolResult(
     schemaIndex = 3,
   )
   public val elapsed: Duration? = null,
+  images: List<BlobRef> = emptyList(),
   unknownFields: ByteString = ByteString.EMPTY,
 ) : Message<ToolResult, Nothing>(ADAPTER, unknownFields) {
+  /**
+   * Images the tool returned to the model, such as a screenshot it read. These are what the agent
+   * saw, not things it made, so they are not \[Artifact\]s. \[output\] marks each one's place.
+   */
+  @field:WireField(
+    tag = 5,
+    adapter = "loquilis.model.BlobRef#ADAPTER",
+    label = WireField.Label.REPEATED,
+    schemaIndex = 4,
+  )
+  public val images: List<BlobRef> = immutableCopyOf("images", images)
+
   @Deprecated(
     message = "Shouldn't be used in Kotlin",
     level = DeprecationLevel.HIDDEN,
@@ -83,6 +99,7 @@ public class ToolResult(
     if (output != other.output) return false
     if (is_error != other.is_error) return false
     if (elapsed != other.elapsed) return false
+    if (images != other.images) return false
     return true
   }
 
@@ -94,6 +111,7 @@ public class ToolResult(
       result = result * 37 + (output?.hashCode() ?: 0)
       result = result * 37 + is_error.hashCode()
       result = result * 37 + (elapsed?.hashCode() ?: 0)
+      result = result * 37 + images.hashCode()
       super.hashCode = result
     }
     return result
@@ -105,6 +123,7 @@ public class ToolResult(
     if (output != null) result += """output=$output"""
     result += """is_error=$is_error"""
     if (elapsed != null) result += """elapsed=$elapsed"""
+    if (images.isNotEmpty()) result += """images=$images"""
     return result.joinToString(prefix = "ToolResult{", separator = ", ", postfix = "}")
   }
 
@@ -113,8 +132,9 @@ public class ToolResult(
     output: Content? = this.output,
     is_error: Boolean = this.is_error,
     elapsed: Duration? = this.elapsed,
+    images: List<BlobRef> = this.images,
     unknownFields: ByteString = this.unknownFields,
-  ): ToolResult = ToolResult(call_id, output, is_error, elapsed, unknownFields)
+  ): ToolResult = ToolResult(call_id, output, is_error, elapsed, images, unknownFields)
 
   public companion object {
     @JvmField
@@ -140,6 +160,7 @@ public class ToolResult(
         if (value.elapsed != null) {
           size += ProtoAdapter.DURATION.encodedSizeWithTag(4, value.elapsed)
         }
+        size += BlobRef.ADAPTER.asRepeated().encodedSizeWithTag(5, value.images)
         return size
       }
 
@@ -156,11 +177,13 @@ public class ToolResult(
         if (value.elapsed != null) {
           ProtoAdapter.DURATION.encodeWithTag(writer, 4, value.elapsed)
         }
+        BlobRef.ADAPTER.asRepeated().encodeWithTag(writer, 5, value.images)
         writer.writeBytes(value.unknownFields)
       }
 
       override fun encode(writer: ReverseProtoWriter, `value`: ToolResult) {
         writer.writeBytes(value.unknownFields)
+        BlobRef.ADAPTER.asRepeated().encodeWithTag(writer, 5, value.images)
         if (value.elapsed != null) {
           ProtoAdapter.DURATION.encodeWithTag(writer, 4, value.elapsed)
         }
@@ -180,12 +203,14 @@ public class ToolResult(
         var output: Content? = null
         var is_error: Boolean = false
         var elapsed: Duration? = null
+        val images = mutableListOf<BlobRef>()
         val unknownFields = reader.forEachTag { tag ->
           when (tag) {
             1 -> call_id = ProtoAdapter.STRING.decode(reader)
             2 -> output = Content.ADAPTER.decode(reader)
             3 -> is_error = ProtoAdapter.BOOL.decode(reader)
             4 -> elapsed = ProtoAdapter.DURATION.decode(reader)
+            5 -> images.add(BlobRef.ADAPTER.decode(reader))
             else -> reader.readUnknownField(tag)
           }
         }
@@ -194,6 +219,7 @@ public class ToolResult(
           output = output,
           is_error = is_error,
           elapsed = elapsed,
+          images = images,
           unknownFields = unknownFields
         )
       }
@@ -201,6 +227,7 @@ public class ToolResult(
       override fun redact(`value`: ToolResult): ToolResult = value.copy(
         output = value.output?.let(Content.ADAPTER::redact),
         elapsed = value.elapsed?.let(ProtoAdapter.DURATION::redact),
+        images = value.images.redactElements(BlobRef.ADAPTER),
         unknownFields = ByteString.EMPTY
       )
     }

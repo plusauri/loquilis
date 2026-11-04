@@ -18,7 +18,7 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Test
-        run: ./gradlew :kit-model:jvmTest
+        run: ./gradlew :kit-model:jvmTest :kit-agents:jvmTest
       - name: Generated code matches the protos
         run: |
           ./gradlew :kit-model:generateCommonMainProtos

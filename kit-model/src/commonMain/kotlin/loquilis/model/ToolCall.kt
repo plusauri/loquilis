@@ -84,6 +84,16 @@ public class ToolCall(
     schemaIndex = 4,
   )
   public val target_path: String = "",
+  /**
+   * What the agent says the call is for, when it gives one: "Run the test suite".
+   */
+  @field:WireField(
+    tag = 6,
+    adapter = "com.squareup.wire.ProtoAdapter#STRING",
+    label = WireField.Label.OMIT_IDENTITY,
+    schemaIndex = 5,
+  )
+  public val description: String = "",
   unknownFields: ByteString = ByteString.EMPTY,
 ) : Message<ToolCall, Nothing>(ADAPTER, unknownFields) {
   @Deprecated(
@@ -101,6 +111,7 @@ public class ToolCall(
     if (kind != other.kind) return false
     if (input != other.input) return false
     if (target_path != other.target_path) return false
+    if (description != other.description) return false
     return true
   }
 
@@ -113,6 +124,7 @@ public class ToolCall(
       result = result * 37 + kind.hashCode()
       result = result * 37 + (input?.hashCode() ?: 0)
       result = result * 37 + target_path.hashCode()
+      result = result * 37 + description.hashCode()
       super.hashCode = result
     }
     return result
@@ -125,6 +137,7 @@ public class ToolCall(
     result += """kind=$kind"""
     if (input != null) result += """input=$input"""
     result += """target_path=${sanitize(target_path)}"""
+    result += """description=${sanitize(description)}"""
     return result.joinToString(prefix = "ToolCall{", separator = ", ", postfix = "}")
   }
 
@@ -134,8 +147,9 @@ public class ToolCall(
     kind: ToolKind = this.kind,
     input: Content? = this.input,
     target_path: String = this.target_path,
+    description: String = this.description,
     unknownFields: ByteString = this.unknownFields,
-  ): ToolCall = ToolCall(call_id, tool, kind, input, target_path, unknownFields)
+  ): ToolCall = ToolCall(call_id, tool, kind, input, target_path, description, unknownFields)
 
   public companion object {
     @JvmField
@@ -164,6 +178,9 @@ public class ToolCall(
         if (value.target_path != "") {
           size += ProtoAdapter.STRING.encodedSizeWithTag(5, value.target_path)
         }
+        if (value.description != "") {
+          size += ProtoAdapter.STRING.encodedSizeWithTag(6, value.description)
+        }
         return size
       }
 
@@ -183,11 +200,17 @@ public class ToolCall(
         if (value.target_path != "") {
           ProtoAdapter.STRING.encodeWithTag(writer, 5, value.target_path)
         }
+        if (value.description != "") {
+          ProtoAdapter.STRING.encodeWithTag(writer, 6, value.description)
+        }
         writer.writeBytes(value.unknownFields)
       }
 
       override fun encode(writer: ReverseProtoWriter, `value`: ToolCall) {
         writer.writeBytes(value.unknownFields)
+        if (value.description != "") {
+          ProtoAdapter.STRING.encodeWithTag(writer, 6, value.description)
+        }
         if (value.target_path != "") {
           ProtoAdapter.STRING.encodeWithTag(writer, 5, value.target_path)
         }
@@ -211,6 +234,7 @@ public class ToolCall(
         var kind: ToolKind = ToolKind.TOOL_KIND_UNSPECIFIED
         var input: Content? = null
         var target_path: String = ""
+        var description: String = ""
         val unknownFields = reader.forEachTag { tag ->
           when (tag) {
             1 -> call_id = ProtoAdapter.STRING.decode(reader)
@@ -222,6 +246,7 @@ public class ToolCall(
             }
             4 -> input = Content.ADAPTER.decode(reader)
             5 -> target_path = ProtoAdapter.STRING.decode(reader)
+            6 -> description = ProtoAdapter.STRING.decode(reader)
             else -> reader.readUnknownField(tag)
           }
         }
@@ -231,6 +256,7 @@ public class ToolCall(
           kind = kind,
           input = input,
           target_path = target_path,
+          description = description,
           unknownFields = unknownFields
         )
       }

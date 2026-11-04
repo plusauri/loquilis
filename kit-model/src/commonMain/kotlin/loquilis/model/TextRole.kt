@@ -28,6 +28,11 @@ public enum class TextRole(
    * The answer that ends the turn.
    */
   TEXT_ROLE_REPLY(2),
+  /**
+   * Text the agent's harness put into the conversation, such as an expanded skill prompt. The model
+   * reads it, but neither the user nor the model wrote it. Author is AUTHOR_SYSTEM.
+   */
+  TEXT_ROLE_INJECTED(3),
   ;
 
   public companion object {
@@ -45,6 +50,7 @@ public enum class TextRole(
       0 -> TEXT_ROLE_UNSPECIFIED
       1 -> TEXT_ROLE_NARRATION
       2 -> TEXT_ROLE_REPLY
+      3 -> TEXT_ROLE_INJECTED
       else -> null
     }
   }

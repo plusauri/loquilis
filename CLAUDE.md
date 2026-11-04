@@ -19,5 +19,6 @@ Loquilis is a desktop console and a Kotlin Multiplatform library (`loquilis-kit`
 Run from the repo root.
 
 - Regenerate Kotlin after a `.proto` change: `./gradlew :kit-model:generateCommonMainProtos`. The generated code in `kit-model/src/commonMain/kotlin/loquilis/model/` is committed and is never hand-edited. Hand-written code lives in `loquilis/kit/`.
-- Test: `./gradlew :kit-model:jvmTest`.
+- Test: `./gradlew :kit-model:jvmTest :kit-agents:jvmTest`.
+- One real exchange with `claude`, which costs a little: `LOQUILIS_LIVE=1 ./gradlew :kit-agents:jvmTest --tests '*ClaudeLiveSessionTest*'`.
 - Schema checks: `buf lint` and `buf breaking --against '.git#ref=HEAD~1'`.
