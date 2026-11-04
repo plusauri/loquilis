@@ -1,6 +1,6 @@
 # Conversation model and storage
 
-- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `kit-model/protobuf/loquilis/model/v1/`, `kit-model` and `kit-agents` (Claude) are built and tested. `app` is a read-only review window over a recorded take, held in memory. `kit-store` and `kit-views` are not started.
+- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `kit-model/protobuf/loquilis/model/v1/`, `kit-model` and `kit-agents` (Claude) are built and tested. `kit-store` is built and tested. `app` is a read-only review window over a recorded take, held in memory, and does not read the store yet. `kit-views` is not started.
 - Rule this works under: `doc/decisions/0001-dependency-direction.md` (no dependency on Tutilis).
 
 ## What the model has to do
@@ -130,17 +130,17 @@ Unlike Tutilis's dossier store, which keeps one proto3-JSON document per plan, L
 | `entry` | header columns: id, conversation, seq, parent, at, author, kind, state, visibility, raw range. `body` holds the `EntryBody` bytes, and `extensions` holds bytes. | Indexed on `(conversation, seq)` and `(parent)`. |
 | `turn` | `TurnSummary` as columns | Kept up to date on append. Rebuildable from entries. |
 | `branch` | `Branch` as columns | |
-| `raw_event` | conversation, seq range, compressed block of lines | Blocks of about 256 KB. |
+| `raw_event` | conversation, seq range, encoding, lines | The newest lines sit one to a row, so each is durable when written. They fold into compressed blocks of about 256 KB. |
 | `blob` | sha256, size, media type, compressed bytes *or* a file path | Content-addressed and deduplicated. Content up to 4 KB stays inline in the entry, and blobs over 1 MB are stored as files beside the db. Both thresholds are to be tuned against real tool outputs. |
-| `entry_fts` | FTS5 over user text, agent text, tool input, tool output | External content. |
+| `entry_fts` | FTS5 over user text, agent text, tool input, tool output | Contentless: it keeps tokens only. Bodies are proto bytes, so SQLite has no text column to reference, and a stored copy would double the library. Snippets are made from the entry when a hit is shown. Private entries are not indexed. |
 
 A test asserts that the columns match the protos, as `DossierSchemaTest` does in Tutilis.
 
 **Paging (L3, L4).** A view asks for `turns(conversation, branch, range)` and gets `TurnSummary` rows. It asks for bodies (`entry(id)` and `blob(ref)`) only when something is on screen or opened. The client cache is a bounded LRU of bodies. Nothing loads a whole conversation, and the memory a conversation uses stays the same no matter how long it is.
 
-**Append path (L7).** The adapter writes the raw line first, then upserts the entry. While text streams, a `STREAMING` entry is updated in place, throttled to about 10 Hz on disk and kept live in memory. A crash loses at most the unflushed tail, and that tail can be rebuilt from the raw lines.
+**Append path (L7).** The adapter writes the raw line first, then upserts the entry. While text streams, a `STREAMING` entry is updated in place, throttled to about 10 Hz on disk and kept live in memory. `Recorder` commits a line and its entries together, so a crash cannot leave an entry without its line. A live session writes the two separately, so `recover` replays the raw log through a fresh parser, keeps existing ids, and closes tool calls left open as interrupted.
 
-**Export.** A folder holding `manifest.json`, `entries.jsonl`, `blobs/` and `raw.jsonl.gz` (`export.proto`). That folder is what a git records repo such as `plusauri/cogilis-conversations` would hold. The folder, not the SQLite file, is the interchange format.
+**Export.** A folder holding `manifest.json`, `entries.jsonl`, `blobs/` and `raw.jsonl.gz` (`export.proto`). That folder is what a git records repo such as `plusauri/cogilis-conversations` would hold. The folder, not the SQLite file, is the interchange format. An export leaves out private entries unless asked. Their raw lines stay as blank lines, so thinking never leaks through the raw log and every other entry's `RawRange` still holds.
 
 ## Libraries
 
@@ -151,7 +151,7 @@ There is one default library, and **File → Open Library** opens another, as in
 | Module | Depends on | Holds |
 |---|---|---|
 | `kit-model` | Wire runtime only | The `.proto` files, the generated Kotlin, and the thin Kotlin layer. Pure, `commonMain`. |
-| `kit-store` | `kit-model`, sqlite | `Store` (append, page, search, blobs, raw events), migrations, and export/import. |
+| `kit-store` | `kit-agents`, sqlite | `Store` (append, page, search, blobs, raw events), migrations, export/import, and `Recorder`/`recover`, which need the parser seam. |
 | `kit-agents` | `kit-model` | The `AgentAdapter` seam, `ClaudeLiveAdapter` (stream-json on stdin) and `GrokResumeAdapter`, each with a fixture test. |
 | `kit-views` | `kit-model`, `kit-store`, Compose | `ConversationViewModel` (paging, cache, live updates), and the Messages view (user on the right, agent on the left), the Tree view and the Search view. |
 | `app` | all of the above | A window, the library picker, and settings. Kept thin. |
@@ -178,15 +178,17 @@ There is one default library, and **File → Open Library** opens another, as in
 - **Text does not stream by the word.** The session gets whole blocks. Word-by-word text needs `--include-partial-messages` and handling for its events.
 - **Attachments are not sent.** `send` takes text only.
 - **Subagents are tested on hand-written lines only.** No recorded stream has one.
+- **Turns cover the main branch only.** Forked entries store and export, but no turn rows are kept for a fork until branching is built.
+- **`recover` assumes the parser wrote every entry but user messages.** An app-written entry such as an `AppCommand` will need handling there once commands are sent.
 - **Grok is not started.** `GrokResumeAdapter` is next after the store, or sooner if a second agent should test the seam.
 
 ## Tests that prove the model
 
-- **Fixture round trip** (needs `kit-store`): each recorded transcript (Claude stream-json, Grok streaming-json) goes raw → entries → export → import → identical entries.
+- **Fixture round trip** (`aRecordedTakeRoundTripsToIdenticalFiles`): a recorded transcript goes raw → entries → export → import → export, and the two exports are identical files. Claude only until the Grok adapter exists.
 - **Cogilis parity** (`ClaudeParityTest`): a real Cogilis take, replayed from its raw stream, has every turn, step, input, output head, reply, duration, cost and timestamp its record holds. This is the proof for rule 0001. Figures and the Cogilis-only extensions are not covered yet.
 - **A real session** (`theRealClaudeKeepsContextAcrossMessages`, `LOQUILIS_LIVE=1`): one short exchange with the real `claude`, opt-in because it costs money.
-- **Scale:** a synthetic conversation of 100k entries and 1 GB of output. Opening it, scrolling to the middle and searching it each stay within a fixed time and memory budget, asserted in the test.
-- **Crash:** kill the writer mid-stream, reopen, and the entries rebuilt from raw events match.
+- **Scale** (`ScaleTest`, on a 256 MB heap): a synthetic conversation of 100k entries and 1 GB of output. Opening it, paging from the middle and searching it each stay within a time budget asserted in the test. Normal runs use a small size, and `LOQUILIS_SCALE=1` runs the full one.
+- **Crash** (`CrashTest`): a writer process is killed mid-stream, and after `recover` the library matches an uninterrupted run over the same lines.
 - **Schema:** `buf lint` and `buf breaking`, plus the column-to-proto check.
 
 ## Decided 2026-11-03

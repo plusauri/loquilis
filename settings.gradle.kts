@@ -22,4 +22,5 @@ rootProject.name = "loquilis"
 
 include(":kit-model")
 include(":kit-agents")
+include(":kit-store")
 include(":app")
