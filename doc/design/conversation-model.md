@@ -1,6 +1,6 @@
 # Conversation model and storage
 
-- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `kit-model/protobuf/loquilis/model/v1/`, `kit-model` and `kit-agents` (Claude) are built and tested. `kit-store`, `kit-views` and `app` are not started.
+- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `kit-model/protobuf/loquilis/model/v1/`, `kit-model` and `kit-agents` (Claude) are built and tested. `app` is a read-only review window over a recorded take, held in memory. `kit-store` and `kit-views` are not started.
 - Rule this works under: `doc/decisions/0001-dependency-direction.md` (no dependency on Tutilis).
 
 ## What the model has to do

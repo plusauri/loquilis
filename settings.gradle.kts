@@ -1,6 +1,7 @@
 pluginManagement {
     repositories {
         gradlePluginPortal()
+        google()
         mavenCentral()
     }
 }
@@ -12,6 +13,7 @@ plugins {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        google()
         mavenCentral()
     }
 }
@@ -20,3 +22,4 @@ rootProject.name = "loquilis"
 
 include(":kit-model")
 include(":kit-agents")
+include(":app")
