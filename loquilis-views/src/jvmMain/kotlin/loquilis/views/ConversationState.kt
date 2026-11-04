@@ -75,6 +75,11 @@ class ConversationState(val store: Store, conversationId: String) {
         if (!collapsed.remove(id)) collapsed += id
     }
 
+    fun collapseAll() {
+        openTreeTurns.clear()
+        collapsed.clear()
+    }
+
     /** The rows an open turn adds to the tree. */
     fun treeRows(turn: LoadedTurn): List<TreeRow> = visibleTree(turn.tree, collapsed)
 

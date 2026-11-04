@@ -106,19 +106,61 @@ class ConversationWindowTest {
     }
 
     @Test
-    fun theTreeStartsAsOneLinePerTurnAndOpensByTheChevron() = runDesktopComposeUiTest(1320, 880) {
+    fun clickingARowInTheTreeSelectsItAndTogglesIt() = runDesktopComposeUiTest(1320, 880) {
         val state = open()
         onNodeWithText("Tree").performClick()
         waitForIdle()
         assertEquals(ConversationView.Tree, state.view)
         assertEquals(7, onAllNodesWithText("You").fetchSemanticsNodes().size)
         shot("tree-closed")
-        onAllNodesWithText("▸")[0].performClick()
+
+        val first = state.pager.summary(1)!!
+        onAllNodesWithText("You")[0].performClick()
         waitForIdle()
         assertEquals(setOf(1), state.openTreeTurns.keys.toSet())
-        onAllNodesWithText("▾")[0].performClick()
+        assertEquals(first.user_entry_id, state.selectedId)
+
+        val turn = state.pager.load(1)
+        val nested = turn.tree.first { it.entry.id in turn.treeParents && it.depth > 0 }
+        onAllNodesWithText(headline(nested.entry))[0].performClick()
         waitForIdle()
-        assertTrue(state.openTreeTurns.isEmpty(), "the chevron closes the turn again")
+        assertTrue(nested.entry.id in state.collapsed, "a row with something under it folds")
+        assertEquals(nested.entry.id, state.selectedId)
+
+        onAllNodesWithText("You")[0].performClick()
+        waitForIdle()
+        assertTrue(state.openTreeTurns.isEmpty(), "a second click closes the turn")
+    }
+
+    @Test
+    fun clickingARowWithNothingUnderItOnlySelectsIt() = runDesktopComposeUiTest(1320, 880) {
+        val state = open()
+        val turn = state.pager.load(1)
+        state.show(ConversationView.Tree)
+        state.toggleTreeTurn(1)
+        waitForIdle()
+        val leaf = turn.tree.drop(1).first { it.entry.id !in turn.treeParents }
+        onAllNodesWithText(headline(leaf.entry))[0].performClick()
+        waitForIdle()
+        assertEquals(leaf.entry.id, state.selectedId)
+        assertTrue(state.collapsed.isEmpty())
+        assertEquals(setOf(1), state.openTreeTurns.keys.toSet())
+    }
+
+    @Test
+    fun collapseAllClosesEveryTurn() = runDesktopComposeUiTest(1320, 880) {
+        val state = open()
+        state.show(ConversationView.Tree)
+        waitForIdle()
+        onAllNodesWithText("You")[1].performClick()
+        waitForIdle()
+        onAllNodesWithText("You")[0].performClick()
+        waitForIdle()
+        assertEquals(setOf(1, 2), state.openTreeTurns.keys.toSet())
+        shot("tree-open")
+        onNodeWithText("Collapse all").performClick()
+        waitForIdle()
+        assertTrue(state.openTreeTurns.isEmpty())
     }
 
     @Test

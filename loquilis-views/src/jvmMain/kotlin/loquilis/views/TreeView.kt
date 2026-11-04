@@ -5,9 +5,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,53 +45,78 @@ fun TreeView(state: ConversationState, list: LazyListState) {
         list.scrollToItem(at)
     }
 
-    Box(Modifier.fillMaxSize()) {
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 10.dp)) {
-            turnItems(
-                first = pager.firstOrdinal,
-                last = pager.lastOrdinal,
-                open = state.openTreeTurns.keys,
-                closed = { ordinal ->
-                    val summary = pager.summary(ordinal)
-                    TreeLine(
-                        depth = 0,
-                        label = "You".takeIf { summary != null } ?: "Start",
-                        text = summary?.user_head?.lineSequence()?.firstOrNull() ?: "Before the first message",
-                        emphasized = true,
-                        failed = false,
-                        tag = turnTag(summary),
-                        fold = TreeFold.Closed,
-                        selected = summary?.user_entry_id == state.selectedId,
-                        onToggle = { state.toggleTreeTurn(ordinal) },
-                        onSelect = { summary?.let { state.selectedId = it.user_entry_id } },
-                    )
-                },
-                opened = { ordinal ->
-                    val turn = checkNotNull(state.openTreeTurns[ordinal])
-                    itemsIndexed(state.treeRows(turn), key = { _, row -> row.entry.id }) { index, row ->
-                        val id = row.entry.id
-                        val folds = index == 0 || id in turn.treeParents
+    Column(Modifier.fillMaxSize()) {
+        CollapseAllBar(state)
+        Box(Modifier.fillMaxWidth().weight(1f)) {
+            LazyColumn(state = list, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 10.dp)) {
+                turnItems(
+                    first = pager.firstOrdinal,
+                    last = pager.lastOrdinal,
+                    open = state.openTreeTurns.keys,
+                    closed = { ordinal ->
+                        val summary = pager.summary(ordinal)
                         TreeLine(
-                            depth = row.depth,
-                            label = kindLabel(row.entry),
-                            text = headline(row.entry),
-                            emphasized = row.entry.body?.user_message != null,
-                            failed = row.entry.state == EntryState.ENTRY_STATE_FAILED,
-                            tag = tag(row.entry),
-                            fold = when {
-                                !folds -> TreeFold.None
-                                id in state.collapsed -> TreeFold.Closed
-                                else -> TreeFold.Open
+                            depth = 0,
+                            label = "You".takeIf { summary != null } ?: "Start",
+                            text = summary?.user_head?.lineSequence()?.firstOrNull() ?: "Before the first message",
+                            emphasized = true,
+                            failed = false,
+                            tag = turnTag(summary),
+                            fold = TreeFold.Closed,
+                            selected = summary?.user_entry_id == state.selectedId,
+                            onClick = {
+                                summary?.let { state.selectedId = it.user_entry_id }
+                                state.toggleTreeTurn(ordinal)
                             },
-                            selected = id == state.selectedId,
-                            onToggle = { if (index == 0) state.toggleTreeTurn(ordinal) else state.toggleCollapsed(id) },
-                            onSelect = { state.selectedId = id },
                         )
-                    }
-                },
-            )
+                    },
+                    opened = { ordinal ->
+                        val turn = checkNotNull(state.openTreeTurns[ordinal])
+                        itemsIndexed(state.treeRows(turn), key = { _, row -> row.entry.id }) { index, row ->
+                            val id = row.entry.id
+                            val folds = index == 0 || id in turn.treeParents
+                            TreeLine(
+                                depth = row.depth,
+                                label = kindLabel(row.entry),
+                                text = headline(row.entry),
+                                emphasized = row.entry.body?.user_message != null,
+                                failed = row.entry.state == EntryState.ENTRY_STATE_FAILED,
+                                tag = tag(row.entry),
+                                fold = when {
+                                    !folds -> TreeFold.None
+                                    id in state.collapsed -> TreeFold.Closed
+                                    else -> TreeFold.Open
+                                },
+                                selected = id == state.selectedId,
+                                onClick = {
+                                    state.selectedId = id
+                                    when {
+                                        index == 0 -> state.toggleTreeTurn(ordinal)
+                                        folds -> state.toggleCollapsed(id)
+                                    }
+                                },
+                            )
+                        }
+                    },
+                )
+            }
+            VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
         }
-        VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+    }
+}
+
+/** Always there, so the list does not shift when the first turn opens. */
+@Composable
+private fun CollapseAllBar(state: ConversationState) {
+    val palette = LocalPalette.current
+    val anyOpen = state.openTreeTurns.isNotEmpty()
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.End) {
+        Text(
+            "Collapse all",
+            color = if (anyOpen) palette.accent else palette.muted,
+            fontSize = 12.sp,
+            modifier = Modifier.clickable(enabled = anyOpen, onClick = state::collapseAll).padding(horizontal = 6.dp, vertical = 2.dp),
+        )
     }
 }
 
@@ -107,29 +132,28 @@ private fun TreeLine(
     tag: String?,
     fold: TreeFold,
     selected: Boolean,
-    onToggle: () -> Unit,
-    onSelect: () -> Unit,
+    onClick: () -> Unit,
 ) {
     val palette = LocalPalette.current
     Row(
         Modifier
             .fillMaxWidth()
             .background(if (selected) palette.selection else Color.Transparent)
-            .clickable(onClick = onSelect)
+            .clickable(onClick = onClick)
             .padding(start = (12 + 18 * depth).dp, end = 20.dp, top = 3.dp, bottom = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (fold != TreeFold.None) {
-            Text(
-                if (fold == TreeFold.Closed) "▸" else "▾",
-                color = palette.muted,
-                fontSize = 12.sp,
-                modifier = Modifier.width(14.dp).clickable(onClick = onToggle),
-            )
-        } else {
-            Spacer(Modifier.width(14.dp))
-        }
+        Text(
+            when (fold) {
+                TreeFold.None -> ""
+                TreeFold.Open -> "▾"
+                TreeFold.Closed -> "▸"
+            },
+            color = palette.muted,
+            fontSize = 16.sp,
+            modifier = Modifier.width(18.dp),
+        )
         Text(
             label,
             color = if (failed) palette.failed else palette.accent,
