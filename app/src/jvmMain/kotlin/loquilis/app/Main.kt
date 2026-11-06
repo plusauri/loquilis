@@ -11,6 +11,9 @@ import loquilis.views.ReviewTheme
 
 /** Opens the bundled take, or the library file or take folder named as the first argument. */
 fun main(args: Array<String>) {
+    // Gradle passes this as true to what it starts, which keeps a Mac app out of the Dock and Cmd-Tab.
+    // It has to change before AWT loads.
+    System.setProperty("apple.awt.UIElement", "false")
     val library = openLibrary(args.firstOrNull()?.let { Path.of(it) })
     // A hook, not a finally: application() ends the process itself when the window closes.
     Runtime.getRuntime().addShutdownHook(Thread(library::close))

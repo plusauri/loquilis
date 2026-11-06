@@ -31,6 +31,7 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "loquilis.app.MainKt"
+        jvmArgs += "-Xdock:name=Loquilis"
     }
 }
 
