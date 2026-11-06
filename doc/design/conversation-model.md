@@ -18,7 +18,7 @@ Loquilis records conversations with coding agents and shows them in several view
 | L5 | A tree view | Entries have parents. A conversation can branch (edit and resend, fork from a turn), and a turn holds nested work (tool calls, subagents). |
 | L6 | Search across every conversation | One full-text index over messages, tool inputs and tool outputs, for every conversation in the library. |
 | L7 | Live streaming | A turn grows while you watch. The model has an in-progress state, and partial text is a first-class entry state. |
-| L8 | Many agents | One adapter per agent, each normalizing its stream into the same entries. Claude holds a live session on stdin; Grok and Codex resume one process per turn. |
+| L8 | Many agents | One adapter per agent, each normalizing its stream into the same entries. Claude and Grok hold a live session on stdin; Codex may resume one process per turn. |
 | L9 | A library others build on, from other languages too | Core types stay small and general, and they are defined in a language-neutral schema. Bespoke data goes in typed extensions. |
 
 ### Tutilis's needs, read from `:cogilis-records` (schema 1)
@@ -152,7 +152,7 @@ There is one default library, and **File → Open Library** opens another, as in
 |---|---|---|
 | `loquilis-model` | Wire runtime only | The `.proto` files, the generated Kotlin, and the thin Kotlin layer. Pure, `commonMain`. |
 | `loquilis-store` | `loquilis-agents`, sqlite | `Store` (append, page, search, blobs, raw events), migrations, export/import, and `Recorder`/`recover`, which need the parser seam. |
-| `loquilis-agents` | `loquilis-model` | The `AgentAdapter` seam, `ClaudeLiveAdapter` (stream-json on stdin) and `GrokResumeAdapter`, each with a fixture test. |
+| `loquilis-agents` | `loquilis-model` | The `AgentAdapter` seam, `ClaudeStreamParser` (stream-json on stdin) and `GrokAcpParser` (`grok agent stdio`, JSON-RPC), each with `ProcessSession` running the process and a test of its stream. |
 | `loquilis-views` | `loquilis-store`, Compose | `ConversationPager` (turn summaries in pages, a bounded set of decoded turns), `ConversationState`, and the Messages view (user on the right, agent on the left), the Tree view, the Search view and the inspector. |
 | `app` | all of the above | A window, the library picker, and settings. Kept thin. |
 
@@ -191,7 +191,7 @@ A permission request is an entry, and so is the answer, as an `AppCommand`. `Par
 - **Turns cover the main branch only.** Forked entries store and export, but no turn rows are kept for a fork until branching is built.
 - **A turn is read whole.** Views page by turn, so one turn of very many entries is decoded all at once when shown. Laying out one turn at a time also means a tool result arriving in a later turn than its call shows on its own line.
 - **`recover` assumes the parser wrote every entry but user messages.** An app-written entry such as an `AppCommand` will need handling there once commands are sent.
-- **Grok is not started.** `GrokResumeAdapter` is next after the store, or sooner if a second agent should test the seam.
+- **Grok runs live, not per turn.** The plan was to resume one process per turn, but `grok agent stdio` holds a session, asks permission, cancels and resumes. `AgentParser` and `AgentSession` needed no change. Text arrives in chunks, which become one entry when the run of chunks ends. Each session sets `yoloMode` false, so Grok asks here even when the person's own settings approve everything.
 
 ## Tests that prove the model
 

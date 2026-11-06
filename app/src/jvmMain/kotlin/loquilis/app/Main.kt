@@ -14,6 +14,7 @@ import java.awt.image.BufferedImage
 import java.nio.file.Path
 import javax.imageio.ImageIO
 import loquilis.store.ClaudeAgent
+import loquilis.store.GrokAgent
 import loquilis.views.LibraryState
 import loquilis.views.LibraryWindow
 import loquilis.views.ReviewTheme
@@ -29,7 +30,7 @@ fun main(args: Array<String>) {
     val icon = readAppIcon()
     showInDock(icon)
     val library = openArgument(args.firstOrNull())
-    val state = LibraryState(library.store, ClaudeAgent(), library.conversationId)
+    val state = LibraryState(library.store, mapOf("claude" to ClaudeAgent(), "grok" to GrokAgent()), library.conversationId)
     // A hook, not a finally: application() ends the process itself when the window closes.
     Runtime.getRuntime().addShutdownHook(
         Thread {
@@ -44,7 +45,7 @@ fun main(args: Array<String>) {
             icon = remember { BitmapPainter(icon.toComposeImageBitmap()) },
             state = rememberWindowState(width = 1320.dp, height = 880.dp),
         ) {
-            ReviewTheme { LibraryWindow(state) { chooseFolder()?.let(state::newConversation) } }
+            ReviewTheme { LibraryWindow(state) { agent -> chooseFolder()?.let { state.newConversation(it, agent) } } }
         }
     }
 }

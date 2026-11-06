@@ -18,10 +18,16 @@ import loquilis.store.newConversation
  */
 class LibraryState(
     val store: Store,
-    private val agent: Agent,
+    private val agents: Map<String, Agent>,
     first: String? = null,
     private val now: () -> Instant = { java.time.Instant.now() },
 ) {
+    constructor(store: Store, agent: Agent, first: String? = null, now: () -> Instant = { java.time.Instant.now() }) :
+        this(store, mapOf(DEFAULT_AGENT to agent), first, now)
+
+    /** The agents a new conversation can start with, by their command-line tool's name. */
+    val agentNames: List<String> get() = agents.keys.toList()
+
     var conversations by mutableStateOf(store.conversations(LISTED))
         private set
     var current by mutableStateOf(first?.let { ConversationState(store, it) })
@@ -36,16 +42,20 @@ class LibraryState(
     val currentId: String? get() = current?.pager?.conversationId
 
     fun chat(conversationId: String): LiveChat =
-        synchronized(chats) { chats.getOrPut(conversationId) { LiveChat(store, conversationId, agent, now) } }
+        synchronized(chats) { chats.getOrPut(conversationId) { LiveChat(store, conversationId, agentOf(conversationId), now) } }
+
+    /** A stored conversation goes on with the agent that had it, or the first one if that one is not here. */
+    private fun agentOf(conversationId: String): Agent =
+        agents[store.conversation(conversationId)?.agent?.cli] ?: agents.values.first()
 
     fun select(conversationId: String) {
         val showing = current
         if (showing == null) current = ConversationState(store, conversationId).also { it.following = true } else showing.open(conversationId)
     }
 
-    /** Starts a conversation for an agent to work on in [workspace], and shows it. */
-    fun newConversation(workspace: Path) {
-        val conversation = store.newConversation(workspace, now())
+    /** Starts a conversation for [agent] to work on in [workspace], and shows it. */
+    fun newConversation(workspace: Path, agent: String = agentNames.first()) {
+        val conversation = store.newConversation(workspace, now(), cli = agent)
         refreshList()
         select(conversation.id)
     }
@@ -73,5 +83,6 @@ class LibraryState(
 }
 
 internal const val NEW_CONVERSATION = "New conversation"
+private const val DEFAULT_AGENT = "claude"
 
 internal val Conversation.shownTitle: String get() = title.ifEmpty { NEW_CONVERSATION }

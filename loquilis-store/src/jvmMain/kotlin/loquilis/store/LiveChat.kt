@@ -12,6 +12,8 @@ import loquilis.agents.AgentParser
 import loquilis.agents.AgentSession
 import loquilis.agents.ClaudeLiveSession
 import loquilis.agents.ClaudeStreamParser
+import loquilis.agents.GrokAcpParser
+import loquilis.agents.GrokLiveSession
 import loquilis.agents.ParseOutput
 import loquilis.agents.PermissionAsk
 import loquilis.agents.SessionEvent
@@ -56,6 +58,22 @@ class ClaudeAgent(private val extraArgs: List<String> = emptyList(), private val
             File(conversation.workspace_path),
             model = conversation.agent?.model?.ifEmpty { null },
             extraArgs = extraArgs,
+            resume = conversation.agent?.agent_session_id?.ifEmpty { null },
+            firstRawSeq = firstRawSeq,
+            command = command,
+        )
+}
+
+/** `grok`, in its one-process-per-conversation form. A conversation carries on through its session id. */
+class GrokAgent(private val command: List<String> = listOf("grok")) : Agent {
+    override fun parser(conversationId: String, blobs: BlobSink, newId: () -> String): AgentParser =
+        GrokAcpParser(conversationId, ContentFactory(blobs), newId)
+
+    override fun start(conversation: Conversation, parser: AgentParser, firstRawSeq: Long): AgentSession =
+        GrokLiveSession(
+            parser,
+            File(conversation.workspace_path),
+            model = conversation.agent?.model?.ifEmpty { null },
             resume = conversation.agent?.agent_session_id?.ifEmpty { null },
             firstRawSeq = firstRawSeq,
             command = command,

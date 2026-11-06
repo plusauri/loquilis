@@ -60,7 +60,7 @@ private const val REFRESH_MILLIS = 100L
  * [onNewConversation] asks the host where the agent should work.
  */
 @Composable
-fun LibraryWindow(state: LibraryState, onNewConversation: () -> Unit) {
+fun LibraryWindow(state: LibraryState, onNewConversation: (agent: String) -> Unit) {
     val palette = LocalPalette.current
     Row(Modifier.fillMaxSize().background(palette.page)) {
         ConversationList(state, onNewConversation, Modifier.width(260.dp).fillMaxHeight().background(palette.panel))
@@ -91,15 +91,15 @@ private fun Follow(state: LibraryState, showing: ConversationState, id: String) 
 }
 
 @Composable
-private fun ConversationList(state: LibraryState, onNewConversation: () -> Unit, modifier: Modifier) {
+private fun ConversationList(state: LibraryState, onNewConversation: (agent: String) -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
     Column(modifier) {
-        Text(
-            "New conversation",
+        for (agent in state.agentNames) Text(
+            if (state.agentNames.size == 1) NEW_CONVERSATION else "New ${agentLabel(agent)} conversation",
             color = palette.accent,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.fillMaxWidth().clickable(onClick = onNewConversation).padding(horizontal = 14.dp, vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth().clickable { onNewConversation(agent) }.padding(horizontal = 14.dp, vertical = 12.dp),
         )
         Box(Modifier.fillMaxWidth().weight(1f)) {
             val list = rememberLazyListState()
@@ -125,7 +125,7 @@ private fun ConversationLine(conversation: Conversation, selected: Boolean, aski
     ) {
         Text(conversation.shownTitle, color = palette.ink, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(
-            if (asking) "Waiting for your answer" else conversation.workspace_path.substringAfterLast('/'),
+            if (asking) "Waiting for your answer" else place(conversation),
             color = if (asking) palette.accent else palette.muted,
             fontSize = 11.sp,
             maxLines = 1,
@@ -133,6 +133,14 @@ private fun ConversationLine(conversation: Conversation, selected: Boolean, aski
         )
     }
 }
+
+private fun agentLabel(cli: String) = cli.replaceFirstChar(Char::uppercase)
+
+/** Where a conversation's agent worked, and which agent it was. */
+private fun place(conversation: Conversation) = listOf(
+    conversation.workspace_path.substringAfterLast('/'),
+    agentLabel(conversation.agent?.cli.orEmpty()),
+).filter { it.isNotEmpty() }.joinToString(" · ")
 
 /** The agent's oldest question, with what it wants to do spelled out and every answer one click away. */
 @Composable

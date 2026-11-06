@@ -71,8 +71,7 @@ class ClaudeStreamParser(
     override val adapter = "claude-stream-json"
     override val version = 3
 
-    private var seq = 0L
-    private var spine = ""
+    private val chain = EntryChain(conversationId, newId)
     private var costSoFarMicroUsd: Long? = 0L
     private var stopAsked = false
     private var session: SessionInfo? = null
@@ -82,18 +81,18 @@ class ClaudeStreamParser(
 
     override fun userMessage(text: String, at: Instant): List<ParseOutput> {
         lastAt = at
-        return listOf(append(at, Author.AUTHOR_USER, EntryBody(user_message = UserMessage(contents.text(text))), raw = null))
+        return listOf(chain.append(at, Author.AUTHOR_USER, EntryBody(user_message = UserMessage(contents.text(text))), raw = null))
     }
 
     override fun command(command: AppCommand, at: Instant): List<ParseOutput> {
         if (command.interrupt != null) stopAsked = true
-        return listOf(append(at, Author.AUTHOR_USER, EntryBody(app_command = command), raw = null))
+        return listOf(chain.append(at, Author.AUTHOR_USER, EntryBody(app_command = command), raw = null))
     }
 
     override fun line(rawSeq: Long, line: String, receivedAt: Instant): List<ParseOutput> {
         val raw = RawRange(rawSeq, rawSeq)
         val event = runCatching { Json.parseToJsonElement(line) as? JsonObject }.getOrNull()
-            ?: return listOf(append(receivedAt, Author.AUTHOR_APP, unreadable(line), raw))
+            ?: return listOf(chain.append(receivedAt, Author.AUTHOR_APP, unreadable(line), raw))
         val at = event.str("timestamp")?.let(::instantOf) ?: lastAt ?: receivedAt
         lastAt = at
         return when (event.str("type")) {
@@ -116,9 +115,8 @@ class ClaudeStreamParser(
     }
 
     override fun continueAfter(last: Entry) {
-        seq = last.seq
+        chain.continueAfter(last)
         costSoFarMicroUsd = null
-        spine = last.id
         lastAt = last.at
     }
 
@@ -143,7 +141,7 @@ class ClaudeStreamParser(
             deny = answer(id, buildJsonObject { put("behavior", "deny"); put("message", DENIED) }),
         )
         val body = EntryBody(permission_request = PermissionRequest(id, request.str("tool_use_id").orEmpty(), "$tool: ${description.ifEmpty { detail }}"))
-        return listOf(append(at, Author.AUTHOR_AGENT, body, raw), ParseOutput.Ask(ask))
+        return listOf(chain.append(at, Author.AUTHOR_AGENT, body, raw), ParseOutput.Ask(ask))
     }
 
     private fun allowing(input: JsonObject, rules: List<JsonObject> = emptyList()) = buildJsonObject {
@@ -197,7 +195,7 @@ class ClaudeStreamParser(
     private fun agentText(text: String, at: Instant, raw: RawRange, parent: String?): List<ParseOutput> {
         if (text.isBlank()) return emptyList()
         val body = EntryBody(agent_text = AgentText(contents.text(text), TextRole.TEXT_ROLE_NARRATION))
-        val output = append(at, Author.AUTHOR_AGENT, body, raw, parent)
+        val output = chain.append(at, Author.AUTHOR_AGENT, body, raw, parent)
         if (parent == null) textSinceLastTool += output.entry
         return listOf(output)
     }
@@ -205,7 +203,7 @@ class ClaudeStreamParser(
     private fun thinking(text: String, at: Instant, raw: RawRange, parent: String?): List<ParseOutput> {
         if (text.isBlank()) return emptyList()
         val body = EntryBody(thinking = Thinking(contents.text(text)))
-        return listOf(append(at, Author.AUTHOR_AGENT, body, raw, parent, visibility = Visibility.VISIBILITY_PRIVATE))
+        return listOf(chain.append(at, Author.AUTHOR_AGENT, body, raw, parent, visibility = Visibility.VISIBILITY_PRIVATE))
     }
 
     private fun toolUse(block: JsonObject, at: Instant, raw: RawRange, parent: String?): ParseOutput {
@@ -221,7 +219,7 @@ class ClaudeStreamParser(
             description = input.str("description").orEmpty(),
         )
         if (parent == null) textSinceLastTool.clear()
-        val output = append(at, Author.AUTHOR_AGENT, EntryBody(tool_call = call), raw, parent, state = EntryState.ENTRY_STATE_STREAMING)
+        val output = chain.append(at, Author.AUTHOR_AGENT, EntryBody(tool_call = call), raw, parent, state = EntryState.ENTRY_STATE_STREAMING)
         callsById[call.call_id] = output.entry
         return output
     }
@@ -240,7 +238,7 @@ class ClaudeStreamParser(
     private fun injected(text: String, at: Instant, raw: RawRange, parent: String?): List<ParseOutput> {
         if (text.isBlank()) return emptyList()
         val body = EntryBody(agent_text = AgentText(contents.text(text), TextRole.TEXT_ROLE_INJECTED))
-        return listOf(append(at, Author.AUTHOR_SYSTEM, body, raw, parent))
+        return listOf(chain.append(at, Author.AUTHOR_SYSTEM, body, raw, parent))
     }
 
     private fun toolResult(block: JsonObject, at: Instant, raw: RawRange): List<ParseOutput> {
@@ -257,7 +255,7 @@ class ClaudeStreamParser(
             images = images,
         )
         val state = if (isError) EntryState.ENTRY_STATE_FAILED else EntryState.ENTRY_STATE_COMPLETE
-        val appended = append(at, Author.AUTHOR_TOOL, EntryBody(tool_result = result), raw, parent = call?.id ?: spine, state = state)
+        val appended = chain.append(at, Author.AUTHOR_TOOL, EntryBody(tool_result = result), raw, parent = call?.id ?: chain.spine, state = state)
         return listOfNotNull(call?.let { ParseOutput.Update(it.copy(state = state)) }, appended)
     }
 
@@ -286,7 +284,7 @@ class ClaudeStreamParser(
         val status = info.str("status")
         if (status == null || status == "allowed") return emptyList()
         val notice = Notice(NoticeLevel.NOTICE_LEVEL_WARNING, "Rate limit: $status (${info.str("rateLimitType").orEmpty()})", "rate_limit")
-        return listOf(append(at, Author.AUTHOR_SYSTEM, EntryBody(notice = notice), raw))
+        return listOf(chain.append(at, Author.AUTHOR_SYSTEM, EntryBody(notice = notice), raw))
     }
 
     private fun result(event: JsonObject, at: Instant, raw: RawRange): List<ParseOutput> {
@@ -295,7 +293,7 @@ class ClaudeStreamParser(
         val replyText = event.str("result").orEmpty()
         if (textSinceLastTool.isEmpty() && replyText.isNotBlank()) {
             val body = EntryBody(agent_text = AgentText(contents.text(replyText), TextRole.TEXT_ROLE_REPLY))
-            outputs += append(at, Author.AUTHOR_AGENT, body, raw)
+            outputs += chain.append(at, Author.AUTHOR_AGENT, body, raw)
         }
         textSinceLastTool.clear()
 
@@ -323,7 +321,7 @@ class ClaudeStreamParser(
             else -> EntryState.ENTRY_STATE_FAILED
         }
         stopAsked = false
-        outputs += append(at, Author.AUTHOR_SYSTEM, EntryBody(turn_result = turn), raw, state = state)
+        outputs += chain.append(at, Author.AUTHOR_SYSTEM, EntryBody(turn_result = turn), raw, state = state)
         return outputs
     }
 
@@ -343,37 +341,8 @@ class ClaudeStreamParser(
         notice = Notice(NoticeLevel.NOTICE_LEVEL_WARNING, "An agent line could not be read: ${line.take(200)}", "unreadable_line"),
     )
 
-    /**
-     * Entries in the main line of the turn link to the one before. A subagent's entries hang under the
-     * call that started it and leave the main line where it was.
-     */
-    private fun append(
-        at: Instant,
-        author: Author,
-        body: EntryBody,
-        raw: RawRange?,
-        parent: String? = null,
-        state: EntryState = EntryState.ENTRY_STATE_COMPLETE,
-        visibility: Visibility = Visibility.VISIBILITY_NORMAL,
-    ): ParseOutput.Append {
-        val entry = Entry(
-            id = newId(),
-            conversation_id = conversationId,
-            seq = ++seq,
-            parent_id = parent ?: spine,
-            at = at,
-            author = author,
-            state = state,
-            visibility = visibility,
-            raw = raw,
-            body = body,
-        )
-        if (parent == null) spine = entry.id
-        return ParseOutput.Append(entry)
-    }
-
     private fun parentOf(event: JsonObject): String? =
-        event.str("parent_tool_use_id")?.let { callsById[it]?.id ?: spine }
+        event.str("parent_tool_use_id")?.let { callsById[it]?.id ?: chain.spine }
 
     private fun blocksOf(event: JsonObject): List<JsonObject> =
         ((event["message"] as? JsonObject)?.get("content") as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
@@ -393,18 +362,9 @@ class ClaudeStreamParser(
             else -> ToolKind.TOOL_KIND_OTHER
         }
 
-        fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
-
-        fun JsonObject.long(key: String): Long? = (this[key] as? JsonPrimitive)?.longOrNull
-
         fun instantOf(text: String): Instant? = runCatching {
             val parsed = KotlinInstant.parse(text)
             ofEpochSecond(parsed.epochSeconds, parsed.nanosecondsOfSecond.toLong())
         }.getOrNull()
-
-        fun elapsedBetween(from: Instant, to: Instant) = run {
-            val nanos = (to.getEpochSecond() - from.getEpochSecond()) * 1_000_000_000 + (to.getNano() - from.getNano())
-            durationOfSeconds(nanos.floorDiv(1_000_000_000), nanos.mod(1_000_000_000L))
-        }
     }
 }

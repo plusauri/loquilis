@@ -272,6 +272,38 @@ class LiveChatTest {
         assertEquals(listOf(EntryState.ENTRY_STATE_COMPLETE, EntryState.ENTRY_STATE_INTERRUPTED, EntryState.ENTRY_STATE_COMPLETE), ends)
     }
 
+    /** The real Grok: it asks despite settings that approve everything, stops, and remembers across a restart. Costs a few cents. */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "LOQUILIS_LIVE", matches = "1")
+    fun theRealGrokAsksStopsAndRemembers() {
+        val id = store.newConversation(dir, AT, cli = "grok").id
+        val chat = LiveChat(store, id, GrokAgent())
+        chat.send("Use your terminal tool to run exactly: echo hello > note.txt  Then reply DONE.")
+        chat.answer(runBlocking { withTimeout(90_000) { chat.asks.first { it.isNotEmpty() } } }.single(), Decision.DECISION_ALLOW_ONCE)
+        runBlocking { withTimeout(90_000) { chat.status.first { it == ChatStatus.Idle } } }
+        assertEquals("hello", dir.resolve("note.txt").readText().trim())
+
+        chat.send("Write a 2000 word essay on lighthouses. Use no tools.")
+        Thread.sleep(4000)
+        val started = System.currentTimeMillis()
+        chat.interrupt()
+        runBlocking { withTimeout(20_000) { chat.status.first { it == ChatStatus.Idle } } }
+        println("LIVE stopped in ${System.currentTimeMillis() - started} ms")
+        chat.stop()
+
+        val again = LiveChat(store, id, GrokAgent())
+        again.send("Use your terminal tool to run exactly: echo again >> note.txt  Then reply DONE.")
+        again.answer(runBlocking { withTimeout(90_000) { again.asks.first { it.isNotEmpty() } } }.single(), Decision.DECISION_ALLOW_ONCE)
+        runBlocking { withTimeout(90_000) { again.status.first { it == ChatStatus.Idle } } }
+        again.stop()
+        entries(id).forEach { println("LIVE ${it.seq} ${it.body!!.kind::class.simpleName} ${it.state}") }
+        val ends = entries(id).filter { it.body?.turn_result != null }
+        println("LIVE cost ${ends.map { it.body!!.turn_result!!.usage?.cost_micro_usd }}")
+        assertEquals(listOf(EntryState.ENTRY_STATE_COMPLETE, EntryState.ENTRY_STATE_INTERRUPTED, EntryState.ENTRY_STATE_COMPLETE), ends.map { it.state })
+        assertEquals(2, kinds(id).count { it == "Permission" })
+        assertEquals("hello\nagain", dir.resolve("note.txt").readText().trim())
+    }
+
     /** The real agent across two processes. Costs a few cents, so it runs only with LOQUILIS_LIVE=1. */
     @Test
     @EnabledIfEnvironmentVariable(named = "LOQUILIS_LIVE", matches = "1")

@@ -2,7 +2,7 @@
 
 **Your agents, in a real window.**
 
-Loquilis is a desktop console for conversations with AI coding agents. It drives the agents' own headless modes (Claude Code today, with Grok, Codex and others to follow) and puts a real GUI on top of them. The name comes from the Latin *loqui*, "to speak, to converse".
+Loquilis is a desktop console for conversations with AI coding agents. It drives the agents' own headless modes (Claude Code and Grok today, with Codex and others to follow) and puts a real GUI on top of them. The name comes from the Latin *loqui*, "to speak, to converse".
 
 Loquilis records every turn of a conversation, from both sides, along with every command the agent runs along the way. All of it is stored on disk. You can view the same conversation in different ways and switch between them at any time:
 
