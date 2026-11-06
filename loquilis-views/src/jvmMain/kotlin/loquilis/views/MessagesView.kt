@@ -257,7 +257,7 @@ private fun TurnFooter(row: MessageRow.Footer, selected: Boolean, onClick: () ->
     val palette = LocalPalette.current
     val failed = row.entry.state == EntryState.ENTRY_STATE_FAILED
     Text(
-        turnLine(row.result),
+        turnEndLine(row.entry, row.result),
         color = if (failed) palette.failed else palette.muted,
         fontSize = 11.sp,
         modifier = Modifier

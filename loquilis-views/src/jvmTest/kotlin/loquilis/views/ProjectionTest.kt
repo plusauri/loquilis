@@ -1,5 +1,6 @@
 package loquilis.views
 
+import java.time.Duration
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,7 +15,9 @@ import loquilis.model.Thinking
 import loquilis.model.ToolCall
 import loquilis.model.ToolKind
 import loquilis.model.ToolResult
+import loquilis.model.TurnResult
 import loquilis.model.TurnSummary
+import loquilis.model.Usage
 import loquilis.model.UserMessage
 import loquilis.model.Visibility
 import loquilis.store.Store
@@ -50,6 +53,15 @@ class ProjectionTest {
         val a = reply("a", "c")
         val rows = messagesOf(listOf(u, c, r, a))
         assertEquals(listOf("Said", "Work", "Step", "Reply"), rows.map { it::class.simpleName })
+    }
+
+    @Test
+    fun aStoppedTurnSaysSoInsteadOfCountingNothing() {
+        val result = TurnResult(duration = Duration.ofMillis(7_400), usage = Usage(), agent_turns = 2, is_error = true)
+        val end = entry("e", "u", EntryBody(turn_result = result), EntryState.ENTRY_STATE_INTERRUPTED)
+        assertEquals("Stopped · 7.4 s", turnEndLine(end, result))
+        assertEquals("Stopped · 7.4 s · $0.010", turnEndLine(end, result.copy(usage = Usage(cost_micro_usd = 10_000))))
+        assertEquals(turnLine(result), turnEndLine(end.copy(state = EntryState.ENTRY_STATE_FAILED), result))
     }
 
     @Test

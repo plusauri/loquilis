@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import loquilis.core.kind
 import loquilis.model.Decision
+import loquilis.model.EntryState
 import loquilis.model.Entry
 import loquilis.model.OutcomeStatus
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
@@ -267,6 +268,8 @@ class LiveChatTest {
         entries(id).forEach { println("LIVE ${it.seq} ${it.body!!.kind::class.simpleName} ${it.state}") }
         assertEquals(3, store.turnCount(id, store.conversation(id)!!.main_branch_id))
         assertEquals(2, kinds(id).count { it == "Permission" })
+        val ends = entries(id).filter { it.body?.turn_result != null }.map { it.state }
+        assertEquals(listOf(EntryState.ENTRY_STATE_COMPLETE, EntryState.ENTRY_STATE_INTERRUPTED, EntryState.ENTRY_STATE_COMPLETE), ends)
     }
 
     /** The real agent across two processes. Costs a few cents, so it runs only with LOQUILIS_LIVE=1. */

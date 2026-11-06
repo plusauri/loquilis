@@ -50,7 +50,11 @@ import okio.ByteString.Companion.decodeBase64
  *   entry, since it stays in the raw log and there is nothing to show.
  * - Which text is the reply is only known at the end of a turn, so all assistant text is narration
  *   until the turn's `result` promotes what came after the last tool call.
- * - `total_cost_usd` is cumulative over the session, while `usage` covers the one turn.
+ * - `total_cost_usd` is cumulative over the session and carries on across `--resume`, while `usage` covers
+ *   the one turn. `model_usage_since_last_result` has the turn's own cost, per model, and a stopped turn does
+ *   not have it.
+ * - A stopped turn ends with a `result` with `is_error` true, as a failed turn does. Only the stop before it
+ *   tells them apart.
  * - `system` (`thinking_tokens`, `task_*`), `tool_progress` and allowed `rate_limit_event` lines are
  *   telemetry. They stay in the raw log and make no entry.
  * - With `--permission-prompt-tool stdio`, a `control_request` of subtype `can_use_tool` asks whether a
@@ -65,11 +69,12 @@ class ClaudeStreamParser(
     private val newId: () -> String = Ulid::next,
 ) : AgentParser {
     override val adapter = "claude-stream-json"
-    override val version = 2
+    override val version = 3
 
     private var seq = 0L
     private var spine = ""
-    private var costSoFarMicroUsd = 0L
+    private var costSoFarMicroUsd: Long? = 0L
+    private var stopAsked = false
     private var session: SessionInfo? = null
     private var lastAt: Instant? = null
     private val callsById = mutableMapOf<String, Entry>()
@@ -80,8 +85,10 @@ class ClaudeStreamParser(
         return listOf(append(at, Author.AUTHOR_USER, EntryBody(user_message = UserMessage(contents.text(text))), raw = null))
     }
 
-    override fun command(command: AppCommand, at: Instant): List<ParseOutput> =
-        listOf(append(at, Author.AUTHOR_USER, EntryBody(app_command = command), raw = null))
+    override fun command(command: AppCommand, at: Instant): List<ParseOutput> {
+        if (command.interrupt != null) stopAsked = true
+        return listOf(append(at, Author.AUTHOR_USER, EntryBody(app_command = command), raw = null))
+    }
 
     override fun line(rawSeq: Long, line: String, receivedAt: Instant): List<ParseOutput> {
         val raw = RawRange(rawSeq, rawSeq)
@@ -110,6 +117,7 @@ class ClaudeStreamParser(
 
     override fun continueAfter(last: Entry) {
         seq = last.seq
+        costSoFarMicroUsd = null
         spine = last.id
         lastAt = last.at
     }
@@ -292,7 +300,8 @@ class ClaudeStreamParser(
         textSinceLastTool.clear()
 
         val costMicroUsd = ((event["total_cost_usd"] as? JsonPrimitive)?.doubleOrNull?.times(1_000_000))?.roundToLong()
-        val turnCost = costMicroUsd?.let { it - costSoFarMicroUsd } ?: 0L
+        val spentSince = costSoFarMicroUsd?.let { before -> costMicroUsd?.let { it - before } }
+        val turnCost = reportedTurnCost(event) ?: spentSince ?: 0L
         costMicroUsd?.let { costSoFarMicroUsd = it }
         val usage = event["usage"] as? JsonObject
         val isError = (event["is_error"] as? JsonPrimitive)?.booleanOrNull ?: false
@@ -308,9 +317,21 @@ class ClaudeStreamParser(
             agent_turns = (event["num_turns"] as? JsonPrimitive)?.intOrNull ?: 0,
             is_error = isError,
         )
-        val state = if (isError) EntryState.ENTRY_STATE_FAILED else EntryState.ENTRY_STATE_COMPLETE
+        val state = when {
+            !isError -> EntryState.ENTRY_STATE_COMPLETE
+            stopAsked -> EntryState.ENTRY_STATE_INTERRUPTED
+            else -> EntryState.ENTRY_STATE_FAILED
+        }
+        stopAsked = false
         outputs += append(at, Author.AUTHOR_SYSTEM, EntryBody(turn_result = turn), raw, state = state)
         return outputs
+    }
+
+    /** What this turn cost by the agent's own count, or null if it gave none. */
+    private fun reportedTurnCost(event: JsonObject): Long? {
+        val models = (event["model_usage_since_last_result"] as? JsonObject)?.takeIf { it.isNotEmpty() } ?: return null
+        val costs = models.values.map { ((it as? JsonObject)?.get("costUSD") as? JsonPrimitive)?.doubleOrNull ?: return null }
+        return (costs.sum() * 1_000_000).roundToLong()
     }
 
     private fun asReply(entry: Entry): Entry {

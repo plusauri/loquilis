@@ -8,7 +8,10 @@ import loquilis.core.ContentFactory
 import loquilis.core.EntryKind
 import loquilis.core.isStored
 import loquilis.core.kind
+import loquilis.model.AppCommand
+import loquilis.model.Entry
 import loquilis.model.EntryState
+import loquilis.model.Interrupt
 import loquilis.model.NoticeLevel
 import loquilis.model.TextRole
 import loquilis.model.ToolKind
@@ -160,5 +163,50 @@ class ClaudeStreamParserTest {
         feed(assistant(toolUse("t1", "Bash", """{"command":"sleep 100"}""")))
         parser.abandon(EPOCH).forEach(log::apply)
         assertEquals(EntryState.ENTRY_STATE_INTERRUPTED, log.entries.single().state)
+    }
+
+    private val errorResult = """{"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":1,"total_cost_usd":0.5}"""
+    private fun lastResult() = (log.entries.last().body!!.kind as EntryKind.TurnEnd).result
+
+    @Test fun anErrorAfterAStopIsAStoppedTurn() {
+        parser.command(AppCommand(interrupt = Interrupt()), EPOCH).forEach(log::apply)
+        feed(errorResult)
+        assertEquals(EntryState.ENTRY_STATE_INTERRUPTED, log.entries.last().state)
+    }
+
+    @Test fun anErrorWithNoStopIsAFailedTurn() {
+        feed(errorResult)
+        assertEquals(EntryState.ENTRY_STATE_FAILED, log.entries.last().state)
+    }
+
+    @Test fun aStopCoversOnlyTheTurnItCameIn() {
+        parser.command(AppCommand(interrupt = Interrupt()), EPOCH).forEach(log::apply)
+        feed(errorResult)
+        feed(errorResult)
+        assertEquals(EntryState.ENTRY_STATE_FAILED, log.entries.last().state)
+    }
+
+    @Test fun aTurnThatFinishedBeforeTheStopIsComplete() {
+        parser.command(AppCommand(interrupt = Interrupt()), EPOCH).forEach(log::apply)
+        feed(result)
+        assertEquals(EntryState.ENTRY_STATE_COMPLETE, log.entries.last().state)
+    }
+
+    @Test fun aTurnAfterAResumeCostsItsOwnShare() {
+        parser.continueAfter(Entry(seq = 10))
+        feed("""{"type":"result","is_error":false,"result":"x","total_cost_usd":0.40,"model_usage_since_last_result":{"m":{"costUSD":0.20},"n":{"costUSD":0.01}}}""")
+        assertEquals(210_000L, lastResult().usage!!.cost_micro_usd)
+    }
+
+    @Test fun aStoppedTurnAfterAResumeDoesNotClaimTheWholeSession() {
+        parser.continueAfter(Entry(seq = 10))
+        feed(errorResult)
+        assertEquals(0L, lastResult().usage!!.cost_micro_usd)
+    }
+
+    @Test fun withNoTurnCostThePreviousTotalIsSubtracted() {
+        feed("""{"type":"result","is_error":false,"result":"x","total_cost_usd":0.10}""")
+        feed("""{"type":"result","is_error":false,"result":"y","total_cost_usd":0.25}""")
+        assertEquals(150_000L, lastResult().usage!!.cost_micro_usd)
     }
 }

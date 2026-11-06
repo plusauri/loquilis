@@ -235,7 +235,7 @@ fun headline(entry: Entry): String = when (val kind = entry.body?.kind ?: EntryK
     is EntryKind.Sub -> kind.subAgent.label
     is EntryKind.Command -> commandLine(kind.command)
     is EntryKind.Permission -> kind.request.description.ifBlank { "Asked for permission" }
-    is EntryKind.TurnEnd -> turnLine(kind.result)
+    is EntryKind.TurnEnd -> turnEndLine(entry, kind.result)
     is EntryKind.Note -> kind.notice.text
     EntryKind.Unknown -> "Written by a newer schema"
 }
@@ -252,6 +252,16 @@ private fun commandLine(command: AppCommand): String = when (val kind = command.
 
 private fun firstLine(content: Content?): String =
     content?.preview.orEmpty().lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+
+/** How a turn ended: its [turnLine], or "Stopped · 7.4 s" for one the user stopped, which reports no tokens and may report no cost. */
+fun turnEndLine(entry: Entry, result: TurnResult): String {
+    if (entry.state != EntryState.ENTRY_STATE_INTERRUPTED) return turnLine(result)
+    return buildList {
+        add("Stopped")
+        result.duration?.let { add(seconds(it.getSeconds() + it.getNano() / 1e9)) }
+        result.usage?.cost_micro_usd?.takeIf { it > 0 }?.let { add(money(it)) }
+    }.joinToString(" · ")
+}
 
 /** "12.4 s · $0.031 · 1,204 tokens out · 3 round trips". */
 fun turnLine(result: TurnResult): String = buildList {

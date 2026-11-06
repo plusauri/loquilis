@@ -178,6 +178,7 @@ class LibraryWindowTest {
         onNodeWithText("Send").performClick()
         showing("Stop")
         onNodeWithText("Stop").performClick()
+        showing("Stopped")
         waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Stop").fetchSemanticsNodes().isEmpty() }
         state.close()
     }
