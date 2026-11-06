@@ -61,6 +61,7 @@ fun TreeView(state: ConversationState, list: LazyListState) {
                             text = summary?.user_head?.lineSequence()?.firstOrNull() ?: "Before the first message",
                             emphasized = true,
                             failed = false,
+                            mark = null,
                             tag = turnTag(summary),
                             fold = TreeFold.Closed,
                             selected = summary?.user_entry_id == state.selectedId,
@@ -81,6 +82,7 @@ fun TreeView(state: ConversationState, list: LazyListState) {
                                 text = headline(row.entry),
                                 emphasized = row.entry.body?.user_message != null,
                                 failed = row.entry.state == EntryState.ENTRY_STATE_FAILED,
+                                mark = outcomeMark(row.entry, turn.resultOf(row.entry)),
                                 tag = tag(row.entry),
                                 fold = when {
                                     !folds -> TreeFold.None
@@ -129,6 +131,7 @@ private fun TreeLine(
     text: String,
     emphasized: Boolean,
     failed: Boolean,
+    mark: String?,
     tag: String?,
     fold: TreeFold,
     selected: Boolean,
@@ -154,6 +157,7 @@ private fun TreeLine(
             fontSize = 16.sp,
             modifier = Modifier.width(18.dp),
         )
+        OutcomeMark(mark)
         Text(
             label,
             color = if (failed) palette.failed else palette.accent,

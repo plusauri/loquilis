@@ -80,7 +80,19 @@ class ProjectionTest {
             MessageRow.Step(c2, result("r2", "c2", EntryState.ENTRY_STATE_FAILED), 0, 1),
             MessageRow.Step(c3, result("r3", "c3"), 0, 1),
         )
-        assertEquals("3 tool calls: 2 commands, 1 read, 1 failed", workSummary(steps))
+        assertEquals("3 tool calls: 2 commands, 1 read, ❌ 1 failed", workSummary(steps))
+    }
+
+    @Test
+    fun aStepSaysHowItCameOutWithoutRelyingOnColor() {
+        val running = call("c1", "u")
+        assertEquals("✅", outcomeMark(running, result("r1", "c1")))
+        assertEquals("❌", outcomeMark(running, result("r1", "c1", EntryState.ENTRY_STATE_FAILED)))
+        assertEquals("❌", outcomeMark(running.copy(state = EntryState.ENTRY_STATE_FAILED), result("r1", "c1")))
+        assertEquals("⏹️", outcomeMark(running, result("r1", "c1", EntryState.ENTRY_STATE_INTERRUPTED)))
+        assertEquals("✅", outcomeMark(result("r1", "c1"), null))
+        assertEquals(null, outcomeMark(running, null))
+        assertEquals(null, outcomeMark(reply("a", "u"), null))
     }
 
     @Test

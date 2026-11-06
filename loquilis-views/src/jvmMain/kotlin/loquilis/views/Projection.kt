@@ -107,7 +107,23 @@ private fun subAgentDepth(entry: Entry, byId: Map<String, Entry>): Int {
     return if (call.kind == ToolKind.TOOL_KIND_TASK) 1 else 0
 }
 
-/** What the fold says while closed: "6 tool calls: 4 commands, 2 reads, 1 failed", or "8 commands". */
+private const val FAILED_MARK = "❌"
+private const val STOPPED_MARK = "⏹️"
+private const val DONE_MARK = "✅"
+
+/** How a step came out, readable without telling red from blue. Null while it runs and where nothing was at stake. */
+fun outcomeMark(entry: Entry, result: Entry?): String? {
+    val settled = result ?: entry.takeIf { it.body?.tool_result != null }
+    val states = listOfNotNull(entry.state, settled?.state)
+    return when {
+        EntryState.ENTRY_STATE_FAILED in states -> FAILED_MARK
+        EntryState.ENTRY_STATE_INTERRUPTED in states -> STOPPED_MARK
+        settled?.state == EntryState.ENTRY_STATE_COMPLETE -> DONE_MARK
+        else -> null
+    }
+}
+
+/** What the fold says while closed: "6 tool calls: 4 commands, 2 reads, ❌ 1 failed", or "8 commands". */
 fun workSummary(steps: List<MessageRow.Step>): String {
     val calls = steps.mapNotNull { it.entry.body?.tool_call }
     if (calls.isEmpty()) return plural(steps.size, "step", "steps")
@@ -115,7 +131,7 @@ fun workSummary(steps: List<MessageRow.Step>): String {
         .sortedWith(compareByDescending<Map.Entry<ToolKind, Int>> { it.value }.thenBy { it.key.ordinal })
         .map { (kind, count) -> nounOf(kind).let { (one, many) -> plural(count, one, many) } }
     val failed = steps.count { it.result?.state == EntryState.ENTRY_STATE_FAILED }
-    val parts = byKind + listOfNotNull(if (failed > 0) "$failed failed" else null)
+    val parts = byKind + listOfNotNull(if (failed > 0) "$FAILED_MARK $failed failed" else null)
     return if (byKind.size == 1) parts.joinToString(", ")
     else "${plural(calls.size, "tool call", "tool calls")}: ${parts.joinToString(", ")}"
 }

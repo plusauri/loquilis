@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -220,6 +221,7 @@ private fun StepLine(row: MessageRow.Step, selected: Boolean, onClick: () -> Uni
             .padding(horizontal = 8.dp, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        OutcomeMark(outcomeMark(row.entry, row.result))
         Text(
             kindLabel(row.entry),
             color = if (failed) palette.failed else palette.accent,
@@ -235,6 +237,12 @@ private fun StepLine(row: MessageRow.Step, selected: Boolean, onClick: () -> Uni
             overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+/** Holds its width when empty, so the rows below it keep their columns. */
+@Composable
+internal fun OutcomeMark(mark: String?) {
+    Text(mark.orEmpty(), fontSize = 12.sp, modifier = Modifier.width(18.dp))
 }
 
 @Composable

@@ -129,12 +129,13 @@ class ConversationPager(private val store: Store, val conversationId: String) {
 
     fun inspect(id: String): Inspection? {
         val entry = store.entry(id) ?: return null
-        val call = load(turnOf(entry.seq)).resultOf(entry)?.body?.tool_result
+        val result = load(turnOf(entry.seq)).resultOf(entry)
+        val call = result?.body?.tool_result
         val sections = listOfNotNull(
             bodyContent(entry)?.let { (label, content) -> section(label, content) },
             call?.let { section("Result", it.output) },
         )
-        val raw = entry.raw?.let { store.raw(conversationId, it.first_seq..it.last_seq) }.orEmpty()
+        val raw = listOfNotNull(entry.raw, result?.raw).flatMap { store.raw(conversationId, it.first_seq..it.last_seq) }
         return Inspection(entry, entry.parent_id.takeIf { it.isNotEmpty() }?.let(store::entry), sections, raw)
     }
 

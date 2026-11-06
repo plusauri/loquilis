@@ -61,6 +61,9 @@ class ConversationPagerTest {
     fun aToolCallInspectsWithItsResult() {
         val call = Fixture.entries.first { it.body?.tool_call != null }
         assertEquals(listOf("Input", "Result"), assertNotNull(pager.inspect(call.id)).sections.map { it.label })
+        val result = Fixture.entries.first { it.body?.tool_result?.call_id == call.body?.tool_call?.call_id }
+        val lines = listOf(call, result).sumOf { it.raw!!.last_seq - it.raw!!.first_seq + 1 }
+        assertEquals(lines.toInt(), assertNotNull(pager.inspect(call.id)).raw.size, "the raw lines behind both the call and its result")
     }
 
     @Test
