@@ -19,10 +19,12 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -31,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import loquilis.core.EntryKind
@@ -38,6 +41,11 @@ import loquilis.core.kind
 import loquilis.model.Content
 import loquilis.model.Entry
 import loquilis.model.EntryState
+
+private val USER_WIDTH = 560.dp
+
+/** Wider than a message, since a reply can hold code and tables. */
+private val REPLY_WIDTH = 760.dp
 
 @Composable
 fun MessagesView(state: ConversationState, list: LazyListState) {
@@ -94,7 +102,7 @@ private fun ClosedTurn(state: ConversationState, ordinal: Int) {
         } else {
             state.pager.summary(ordinal)?.let { summary ->
                 UserBubble(summary.user_head, false) {}
-                if (summary.reply_head.isNotEmpty()) AgentBubble(summary.reply_head, false) {}
+                if (summary.reply_head.isNotEmpty()) AgentBubble(remember(summary.reply_head) { markdownBlocks(summary.reply_head) }, false) {}
             }
         }
     }
@@ -106,7 +114,7 @@ private fun TurnRow(state: ConversationState, turn: LoadedTurn, row: MessageRow)
     val select = { id: String -> state.selectedId = id }
     when (row) {
         is MessageRow.Said -> UserBubble(turn.text(row.entry), selected) { select(row.entry.id) }
-        is MessageRow.Reply -> AgentBubble(turn.text(row.entry), selected) { select(row.entry.id) }
+        is MessageRow.Reply -> AgentBubble(turn.reply(row.entry), selected) { select(row.entry.id) }
         is MessageRow.Work -> WorkFold(row, row.turn in state.openTurns) { state.toggleTurn(turn) }
         is MessageRow.Step -> StepLine(row, selected) { select(row.entry.id) }
         is MessageRow.Note -> NoteLine(row.entry, selected) { select(row.entry.id) }
@@ -118,31 +126,35 @@ private fun TurnRow(state: ConversationState, turn: LoadedTurn, row: MessageRow)
 private fun UserBubble(text: String, selected: Boolean, onClick: () -> Unit) {
     val palette = LocalPalette.current
     Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.End) {
-        Bubble(text, palette.userBubble, palette.userInk, RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp), selected, onClick)
+        Bubble(palette.userBubble, RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp), USER_WIDTH, selected, onClick) {
+            SelectionContainer { Text(text, color = palette.userInk, fontSize = 14.sp, lineHeight = 20.sp) }
+        }
     }
 }
 
 @Composable
-private fun AgentBubble(text: String, selected: Boolean, onClick: () -> Unit) {
+private fun AgentBubble(blocks: List<MarkdownBlock>, selected: Boolean, onClick: () -> Unit) {
     val palette = LocalPalette.current
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
-        Bubble(text, palette.agentBubble, palette.agentInk, RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp), selected, onClick)
+        Bubble(palette.agentBubble, RoundedCornerShape(18.dp, 18.dp, 18.dp, 4.dp), REPLY_WIDTH, selected, onClick) {
+            SelectionContainer { MarkdownView(blocks, palette.agentInk) }
+        }
     }
 }
 
 @Composable
-private fun Bubble(text: String, fill: Color, ink: Color, shape: RoundedCornerShape, selected: Boolean, onClick: () -> Unit) {
+private fun Bubble(fill: Color, shape: RoundedCornerShape, width: Dp, selected: Boolean, onClick: () -> Unit, content: @Composable () -> Unit) {
     val palette = LocalPalette.current
     Box(
         Modifier
-            .widthIn(max = 560.dp)
+            .widthIn(max = width)
             .clip(shape)
             .background(fill)
             .then(if (selected) Modifier.border(2.dp, palette.ink, shape) else Modifier)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
     ) {
-        Text(text, color = ink, fontSize = 14.sp, lineHeight = 20.sp)
+        content()
     }
 }
 

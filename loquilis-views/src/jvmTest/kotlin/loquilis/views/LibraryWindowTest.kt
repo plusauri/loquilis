@@ -182,6 +182,28 @@ class LibraryWindowTest {
         state.close()
     }
 
+    @Test fun aReplyIsLaidOutFromItsMarkdown() = runDesktopComposeUiTest(1100, 800) {
+        val reply = dir.resolve("reply.json")
+        val text = listOf(
+            "## What I found", "", "The **parser** keeps a `spine`, as [the design](https://example.com/design) says.", "",
+            "- first point", "- second point", "", "```kotlin", "val answer = 42", "```", "",
+            "| Name | Value |", "|---|---|", "| turns | 3 |", "", "> A quoted line",
+        ).joinToString("\\n")
+        reply.writeText("""{"type":"result","is_error":false,"result":"$text","num_turns":1}""")
+        val state = open(fake("while read -r line; do cat \"$reply\"; echo; done"))
+        onNodeWithText("New conversation").performClick()
+        waitForIdle()
+        write("Report")
+        onNodeWithText("Send").performClick()
+        showing("What I found")
+        showing("The parser keeps a spine, as the design says.")
+        showing("val answer = 42")
+        showing("turns")
+        assertEquals(0, onAllNodesWithText("**", substring = true).fetchSemanticsNodes().size)
+        shot("markdown")
+        state.close()
+    }
+
     @Test fun aSecondConversationKeepsItsOwnDraft() = runDesktopComposeUiTest(1100, 700) {
         val state = open(answers)
         onNodeWithText("New conversation").performClick()

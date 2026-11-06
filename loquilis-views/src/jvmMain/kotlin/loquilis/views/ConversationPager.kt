@@ -26,6 +26,13 @@ class LoadedTurn(val ordinal: Int, val entries: List<Entry>, private val texts: 
     private val resultsByCall: Map<String, Entry> =
         entries.mapNotNull { e -> e.body?.tool_result?.let { it.call_id to e } }.toMap()
 
+    private val replies: Map<String, List<MarkdownBlock>> = messages
+        .filterIsInstance<MessageRow.Reply>()
+        .associate { it.entry.id to markdownBlocks(texts[it.entry.id].orEmpty()) }
+
+    /** A reply laid out, read here so a turn is ready before it reaches the screen. */
+    fun reply(entry: Entry): List<MarkdownBlock> = replies[entry.id].orEmpty()
+
     /** The whole text of a message or reply on this turn. */
     fun text(entry: Entry): String = texts[entry.id].orEmpty()
 
