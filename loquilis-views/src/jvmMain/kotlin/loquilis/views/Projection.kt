@@ -1,9 +1,12 @@
 package loquilis.views
 
+import loquilis.core.CommandKind
 import loquilis.core.EntryKind
 import loquilis.core.kind
 import loquilis.core.preview
+import loquilis.model.AppCommand
 import loquilis.model.Content
+import loquilis.model.Decision
 import loquilis.model.Entry
 import loquilis.model.EntryState
 import loquilis.model.TextRole
@@ -212,8 +215,8 @@ fun kindLabel(entry: Entry): String = when (val kind = entry.body?.kind ?: Entry
     is EntryKind.Result -> "Result"
     is EntryKind.Made -> "Artifact"
     is EntryKind.Sub -> "Subagent"
-    is EntryKind.Command -> "Command"
-    is EntryKind.Permission -> "Permission"
+    is EntryKind.Command -> "You"
+    is EntryKind.Permission -> "Asked"
     is EntryKind.TurnEnd -> "Turn end"
     is EntryKind.Note -> "Notice"
     EntryKind.Unknown -> "Unknown"
@@ -230,11 +233,21 @@ fun headline(entry: Entry): String = when (val kind = entry.body?.kind ?: EntryK
     is EntryKind.Result -> firstLine(kind.result.output).ifBlank { "(no output)" }
     is EntryKind.Made -> kind.artifact.title
     is EntryKind.Sub -> kind.subAgent.label
-    is EntryKind.Command -> "App command"
-    is EntryKind.Permission -> "Permission request"
+    is EntryKind.Command -> commandLine(kind.command)
+    is EntryKind.Permission -> kind.request.description.ifBlank { "Asked for permission" }
     is EntryKind.TurnEnd -> turnLine(kind.result)
     is EntryKind.Note -> kind.notice.text
     EntryKind.Unknown -> "Written by a newer schema"
+}
+
+private fun commandLine(command: AppCommand): String = when (val kind = command.kind) {
+    is CommandKind.Stop -> "Stopped the turn"
+    is CommandKind.Decide -> when (kind.decision.decision) {
+        Decision.DECISION_ALLOW_ONCE -> "Allowed"
+        Decision.DECISION_ALLOW_ALWAYS -> "Allowed from now on"
+        else -> "Denied"
+    }
+    else -> "App command"
 }
 
 private fun firstLine(content: Content?): String =

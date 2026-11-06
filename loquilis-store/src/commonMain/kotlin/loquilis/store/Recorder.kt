@@ -27,6 +27,7 @@ class Recorder(private val store: Store, private val conversationId: String, pri
         when (output) {
             is ParseOutput.Append -> store.appendEntry(output.entry)
             is ParseOutput.Update -> store.updateEntry(output.entry)
+            is ParseOutput.Ask, is ParseOutput.AskEnded -> Unit
             is ParseOutput.Session -> {
                 val conversation = checkNotNull(store.conversation(conversationId)) { "no conversation $conversationId" }
                 val agent = conversation.agent ?: AgentBinding()
@@ -52,8 +53,8 @@ class Recorder(private val store: Store, private val conversationId: String, pri
  * keep their ids, so links into the conversation survive. Tool calls still open at the end of the
  * log are closed as interrupted, since their process is gone.
  *
- * User messages are not in the raw log, so they come from their entries, each replayed after the raw
- * lines of the entry before it. Holds the conversation in memory while it runs. Returns how many
+ * User messages and app commands are not in the raw log, so they come from their entries, each replayed
+ * after the raw lines of the entry before it. Holds the conversation in memory while it runs. Returns how many
  * entries it changed.
  */
 fun recover(store: Store, conversationId: String, at: Instant, parserOf: (newId: () -> String) -> AgentParser): Int {
@@ -67,7 +68,7 @@ fun recover(store: Store, conversationId: String, at: Instant, parserOf: (newId:
         when (output) {
             is ParseOutput.Append -> replayed[output.entry.id] = output.entry
             is ParseOutput.Update -> replayed[output.entry.id] = output.entry
-            is ParseOutput.Session -> Unit
+            is ParseOutput.Session, is ParseOutput.Ask, is ParseOutput.AskEnded -> Unit
         }
     }
 
@@ -83,11 +84,15 @@ fun recover(store: Store, conversationId: String, at: Instant, parserOf: (newId:
     for (entry in stored) {
         val range = entry.raw
         val message = entry.body?.user_message
+        val command = entry.body?.app_command
         if (range != null) {
             mark = maxOf(mark, range.last_seq)
         } else if (message != null) {
             feedThrough(mark)
             take(parser.userMessage(store.text(message.text), entry.at ?: at))
+        } else if (command != null) {
+            feedThrough(mark)
+            take(parser.command(command, entry.at ?: at))
         }
     }
     feedThrough(store.rawCount(conversationId))

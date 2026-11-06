@@ -10,6 +10,8 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
@@ -17,6 +19,7 @@ import kotlinx.serialization.json.longOrNull
 import loquilis.core.ContentFactory
 import loquilis.core.Ulid
 import loquilis.model.AgentText
+import loquilis.model.AppCommand
 import loquilis.model.Author
 import loquilis.model.BlobRef
 import loquilis.model.Entry
@@ -24,6 +27,7 @@ import loquilis.model.EntryBody
 import loquilis.model.EntryState
 import loquilis.model.Notice
 import loquilis.model.NoticeLevel
+import loquilis.model.PermissionRequest
 import loquilis.model.RawRange
 import loquilis.model.TextRole
 import loquilis.model.Thinking
@@ -49,6 +53,11 @@ import okio.ByteString.Companion.decodeBase64
  * - `total_cost_usd` is cumulative over the session, while `usage` covers the one turn.
  * - `system` (`thinking_tokens`, `task_*`), `tool_progress` and allowed `rate_limit_event` lines are
  *   telemetry. They stay in the raw log and make no entry.
+ * - With `--permission-prompt-tool stdio`, a `control_request` of subtype `can_use_tool` asks whether a
+ *   call may run, after the `assistant` event that made the call. The answer is a `control_response`
+ *   on stdin. Its `updatedPermissions` takes the request's own `addRules` suggestions, which `claude`
+ *   then writes to the workspace's `.claude/settings.local.json`. A `control_cancel_request` withdraws
+ *   a request. Read from Claude Code 2.1.318.
  */
 class ClaudeStreamParser(
     private val conversationId: String,
@@ -56,7 +65,7 @@ class ClaudeStreamParser(
     private val newId: () -> String = Ulid::next,
 ) : AgentParser {
     override val adapter = "claude-stream-json"
-    override val version = 1
+    override val version = 2
 
     private var seq = 0L
     private var spine = ""
@@ -71,6 +80,9 @@ class ClaudeStreamParser(
         return listOf(append(at, Author.AUTHOR_USER, EntryBody(user_message = UserMessage(contents.text(text))), raw = null))
     }
 
+    override fun command(command: AppCommand, at: Instant): List<ParseOutput> =
+        listOf(append(at, Author.AUTHOR_USER, EntryBody(app_command = command), raw = null))
+
     override fun line(rawSeq: Long, line: String, receivedAt: Instant): List<ParseOutput> {
         val raw = RawRange(rawSeq, rawSeq)
         val event = runCatching { Json.parseToJsonElement(line) as? JsonObject }.getOrNull()
@@ -83,6 +95,8 @@ class ClaudeStreamParser(
             "user" -> user(event, at, raw)
             "rate_limit_event" -> rateLimit(event, at, raw)
             "result" -> result(event, at, raw)
+            "control_request" -> controlRequest(event, at, raw)
+            "control_cancel_request" -> event.str("request_id")?.let { listOf(ParseOutput.AskEnded(it)) }.orEmpty()
             else -> emptyList()
         }
     }
@@ -99,6 +113,54 @@ class ClaudeStreamParser(
         spine = last.id
         lastAt = last.at
     }
+
+    private fun controlRequest(event: JsonObject, at: Instant, raw: RawRange): List<ParseOutput> {
+        val request = event["request"] as? JsonObject ?: return emptyList()
+        val id = event.str("request_id") ?: return emptyList()
+        if (request.str("subtype") != "can_use_tool") return emptyList()
+        val input = request["input"] as? JsonObject ?: JsonObject(emptyMap())
+        val tool = request.str("display_name") ?: request.str("tool_name").orEmpty()
+        val description = request.str("description").orEmpty()
+        val detail = (input.str("command") ?: input.str("file_path") ?: input.str("path") ?: input.toString()).take(ASK_DETAIL_LENGTH)
+        val rules = (request["permission_suggestions"] as? JsonArray).orEmpty()
+            .filterIsInstance<JsonObject>().filter { it.str("type") == "addRules" }
+        val ask = PermissionAsk(
+            requestId = id,
+            tool = tool,
+            description = description,
+            detail = detail,
+            remember = rules.flatMap(::ruleNames).joinToString(", ").ifEmpty { null },
+            allow = answer(id, allowing(input)),
+            allowAlways = answer(id, allowing(input, rules)).takeIf { rules.isNotEmpty() },
+            deny = answer(id, buildJsonObject { put("behavior", "deny"); put("message", DENIED) }),
+        )
+        val body = EntryBody(permission_request = PermissionRequest(id, request.str("tool_use_id").orEmpty(), "$tool: ${description.ifEmpty { detail }}"))
+        return listOf(append(at, Author.AUTHOR_AGENT, body, raw), ParseOutput.Ask(ask))
+    }
+
+    private fun allowing(input: JsonObject, rules: List<JsonObject> = emptyList()) = buildJsonObject {
+        put("behavior", "allow")
+        put("updatedInput", input)
+        if (rules.isNotEmpty()) put("updatedPermissions", JsonArray(rules))
+    }
+
+    private fun answer(requestId: String, response: JsonObject): String = buildJsonObject {
+        put("type", "control_response")
+        put(
+            "response",
+            buildJsonObject {
+                put("subtype", "success")
+                put("request_id", requestId)
+                put("response", response)
+            },
+        )
+    }.toString()
+
+    private fun ruleNames(suggestion: JsonObject): List<String> =
+        (suggestion["rules"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>().map { rule ->
+            val name = rule.str("toolName").orEmpty()
+            rule.str("ruleContent")?.let { "$name($it)" } ?: name
+        }
 
     private fun init(event: JsonObject): List<ParseOutput> {
         val info = SessionInfo(
@@ -296,6 +358,8 @@ class ClaudeStreamParser(
         ((event["message"] as? JsonObject)?.get("content") as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
 
     private companion object {
+        const val ASK_DETAIL_LENGTH = 2000
+        const val DENIED = "The person said no."
         fun kindOf(tool: String): ToolKind = when {
             tool == "Bash" -> ToolKind.TOOL_KIND_SHELL
             tool == "Read" -> ToolKind.TOOL_KIND_FILE_READ

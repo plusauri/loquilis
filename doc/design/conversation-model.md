@@ -162,6 +162,8 @@ There is one default library, and **File → Open Library** opens another, as in
 
 `LiveChat` is what a host talks to. It starts the agent on the first message, writes what the session produces on one thread, and starts the agent again on the next message after it stops, with `--resume` and the parser and raw numbering carried on from what is stored. A last turn with no result means a crash, so `recover` runs first. Views only read the store: they read the conversation again at most ten times a second while a chat writes.
 
+A permission request is an entry, and so is the answer, as an `AppCommand`. `ParseOutput.Ask` carries each possible answer as the exact line to send, so a host offers the choices without knowing the agent's protocol. "Always" passes back the rules the agent suggested, which `claude` writes to the workspace's `.claude/settings.local.json`. App commands are not in the raw log, so `recover` replays them from their entries, as it does user messages.
+
 `ClaudeLiveSession` runs one `claude` process with messages on stdin, and it emits each raw line before what was parsed from it, which is the order the store must keep. It sends one message per turn: a message sent mid-turn waits, and it is recorded when it goes to the agent. Otherwise a turn's entries would interleave with the next one's. Messages that never went out are reported in `Ended.unsent`.
 
 **What Claude's stream showed** (Claude Code 2.1.x, read across 80 turns of recorded sessions):
@@ -176,8 +178,7 @@ There is one default library, and **File → Open Library** opens another, as in
 ### Known gaps
 
 - **Artifacts are not captured yet.** The stream says a tool ran, not what files it left behind. Cogilis finds figures by looking at the workspace, so Loquilis needs a workspace watcher, or the Tutilis-side importer has to supply them. Until then, nothing creates `Artifact` entries, and T8 is unproven. The fixture take has no figures.
-- **`AppCommand` is not sent yet.** Interrupts and permission prompts go over Claude's control protocol, which no recorded stream shows. `PermissionRequest` and `Interrupt` stay unused until that is read and tested.
-- **A tool that needs approval is refused.** With no permission prompts yet, `claude -p` allows what the person's own settings allow and refuses the rest, and the agent reports the refusal in its reply.
+- **Only interrupts and permission answers are sent as `AppCommand`s.** `SetModel`, `SetPermissionMode`, `Restart` and `Fork` stay unused.
 - **Cost after `--resume` is unproven.** The parser takes each turn's cost as the change in `total_cost_usd`, which starts from zero for each process. If a resumed process reports a total that includes earlier sessions, that process's first turn is overcounted.
 - **The conversation list shows the newest 500.** Search still reaches the rest.
 - **Text does not stream by the word.** The session gets whole blocks. Word-by-word text needs `--include-partial-messages` and handling for its events.

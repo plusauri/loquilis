@@ -1,6 +1,7 @@
 package loquilis.agents
 
 import com.squareup.wire.Instant
+import loquilis.model.AppCommand
 import loquilis.model.Entry
 
 /** What reading one line of an agent's stream produced, in order. */
@@ -13,6 +14,12 @@ sealed interface ParseOutput {
 
     /** What the agent reported about itself. Fills in the conversation's [loquilis.model.AgentBinding]. */
     data class Session(val info: SessionInfo) : ParseOutput
+
+    /** The agent is waiting for an answer. The request itself is an entry, appended just before this. */
+    data class Ask(val ask: PermissionAsk) : ParseOutput
+
+    /** The agent no longer needs an answer to [requestId]. */
+    data class AskEnded(val requestId: String) : ParseOutput
 }
 
 data class SessionInfo(
@@ -20,6 +27,22 @@ data class SessionInfo(
     val model: String,
     val sessionId: String,
     val workspacePath: String,
+)
+
+/**
+ * The agent asking whether it may do something. Each answer is the exact line to send back, so a host
+ * can offer the choices with no idea how this agent's protocol works. [allowAlways] and [remember],
+ * which says what it would allow from now on, are null when the agent offers nothing lasting.
+ */
+data class PermissionAsk(
+    val requestId: String,
+    val tool: String,
+    val description: String,
+    val detail: String,
+    val remember: String?,
+    val allow: String,
+    val allowAlways: String?,
+    val deny: String,
 )
 
 /**
@@ -38,6 +61,9 @@ interface AgentParser {
 
     /** The user's message. Agents do not echo it in their streams, so the app records it here. */
     fun userMessage(text: String, at: Instant): List<ParseOutput>
+
+    /** A command the app sent the agent. It is not in the agent's stream either, so it goes through here. */
+    fun command(command: AppCommand, at: Instant): List<ParseOutput>
 
     /** One raw line. [rawSeq] is its number in the conversation's raw log. */
     fun line(rawSeq: Long, line: String, receivedAt: Instant): List<ParseOutput>

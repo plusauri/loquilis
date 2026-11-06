@@ -109,6 +109,79 @@ class LibraryWindowTest {
         state.close()
     }
 
+    private val asking: Agent get() = fake(
+        """
+        while read -r line; do
+          printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"rm note.txt"}}]}}'
+          printf '%s\n' '{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","display_name":"Bash","input":{"command":"rm note.txt"},"description":"Remove the note","tool_use_id":"t1","permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"rm note.txt"}],"behavior":"allow","destination":"localSettings"}]}}'
+          read -r answer
+          case "${'$'}answer" in
+            *allow*) reply="It is gone." ;;
+            *) reply="I left it alone." ;;
+          esac
+          printf '%s\n' "{\"type\":\"result\",\"is_error\":false,\"result\":\"${'$'}reply\",\"num_turns\":1}"
+        done
+        """.trimIndent(),
+    )
+
+    private fun ComposeUiTest.ask(state: LibraryState) {
+        onNodeWithText("New conversation").performClick()
+        waitForIdle()
+        write("Tidy up")
+        onNodeWithText("Send").performClick()
+        showing("May the agent use Bash?")
+        shot("ask")
+    }
+
+    @Test fun anAskShowsWhatItWantsAndAllowCarriesOn() = runDesktopComposeUiTest(1100, 700) {
+        val state = open(asking)
+        ask(state)
+        showing("rm note.txt")
+        showing("Always allow Bash(rm note.txt) in this folder")
+        onNodeWithText("Allow").performClick()
+        showing("It is gone.")
+        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("May the agent use Bash?").fetchSemanticsNodes().isEmpty() }
+        state.close()
+    }
+
+    @Test fun denyTellsTheAgentNo() = runDesktopComposeUiTest(1100, 700) {
+        val state = open(asking)
+        ask(state)
+        onNodeWithText("Deny").performClick()
+        showing("I left it alone.")
+        state.close()
+    }
+
+    @Test fun aConversationWaitingOnAnAnswerSaysSoInTheList() = runDesktopComposeUiTest(1100, 700) {
+        val state = open(asking)
+        ask(state)
+        onAllNodesWithText("New conversation")[0].performClick()
+        showing("Waiting for your answer")
+        state.close()
+    }
+
+    @Test fun stopShowsOnlyWhileTheAgentWorks() = runDesktopComposeUiTest(1100, 700) {
+        val state = open(
+            fake(
+                """
+                read -r line
+                read -r control
+                printf '%s\n' '{"type":"result","is_error":true,"subtype":"error_during_execution","num_turns":1}'
+                read -r never
+                """.trimIndent(),
+            ),
+        )
+        onNodeWithText("New conversation").performClick()
+        waitForIdle()
+        assertEquals(0, onAllNodesWithText("Stop").fetchSemanticsNodes().size)
+        write("Go")
+        onNodeWithText("Send").performClick()
+        showing("Stop")
+        onNodeWithText("Stop").performClick()
+        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Stop").fetchSemanticsNodes().isEmpty() }
+        state.close()
+    }
+
     @Test fun aSecondConversationKeepsItsOwnDraft() = runDesktopComposeUiTest(1100, 700) {
         val state = open(answers)
         onNodeWithText("New conversation").performClick()

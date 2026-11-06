@@ -9,6 +9,10 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.serialization.json.JsonPrimitive
+import loquilis.model.AppCommand
+import loquilis.model.Decision
+import loquilis.model.Interrupt
+import loquilis.model.PermissionDecision
 
 /** What a running session produces, in the order it must be stored. */
 sealed interface SessionEvent {
@@ -33,6 +37,12 @@ interface AgentSession : AutoCloseable {
      * turn's entries are never interleaved with the next one's.
      */
     fun send(text: String)
+
+    /** Answers what the agent asked. The answer is recorded as a command. */
+    fun answer(ask: PermissionAsk, decision: Decision)
+
+    /** Stops the running turn. The agent stays up, and the turn still ends with its usual result. */
+    fun interrupt()
 
     /** Ends the session now, mid-turn if need be. It still reports [SessionEvent.Ended]. */
     fun stop()
@@ -64,6 +74,7 @@ class ClaudeLiveSession(
     private val waiting = ArrayDeque<String>()
     private var turnRunning = false
     private var closing = false
+    private var interrupts = 0
 
     private val process: Process = ProcessBuilder(
         buildList {
@@ -72,6 +83,7 @@ class ClaudeLiveSession(
             if (model != null) addAll(listOf("--model", model))
             if (resume != null) addAll(listOf("--resume", resume))
             addAll(extraArgs)
+            addAll(listOf("--permission-prompt-tool", "stdio"))
         },
     ).directory(workingDir).start()
 
@@ -127,6 +139,30 @@ class ClaudeLiveSession(
         }
     }
 
+    override fun answer(ask: PermissionAsk, decision: Decision) {
+        val line = when (decision) {
+            Decision.DECISION_ALLOW_ONCE -> ask.allow
+            Decision.DECISION_ALLOW_ALWAYS -> ask.allowAlways ?: ask.allow
+            else -> ask.deny
+        }
+        synchronized(lock) {
+            record(AppCommand(permission_decision = PermissionDecision(ask.requestId, decision)))
+            write(line)
+        }
+    }
+
+    override fun interrupt() {
+        synchronized(lock) {
+            if (!turnRunning) return
+            record(AppCommand(interrupt = Interrupt()))
+            write("""{"type":"control_request","request_id":"interrupt-${++interrupts}","request":{"subtype":"interrupt"}}""")
+        }
+    }
+
+    private fun record(command: AppCommand) {
+        parser.command(command, now()).forEach { channel.trySend(SessionEvent.Parsed(it)) }
+    }
+
     override fun stop() {
         process.destroy()
     }
@@ -134,9 +170,13 @@ class ClaudeLiveSession(
     private fun deliver(text: String) {
         turnRunning = true
         parser.userMessage(text, now()).forEach { channel.trySend(SessionEvent.Parsed(it)) }
+        write(userMessageLine(text))
+    }
+
+    private fun write(line: String) {
         // A dead process fails the write. The reader thread is about to report that as Ended.
         runCatching {
-            stdin.write(userMessageLine(text))
+            stdin.write(line)
             stdin.newLine()
             stdin.flush()
         }

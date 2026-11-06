@@ -113,7 +113,7 @@ class SqliteStoreTest {
         recorded(path).use { store ->
             val conversation = assertNotNull(store.conversation(CONVERSATION))
             assertTrue(conversation.agent?.cli_version.orEmpty().isNotEmpty())
-            assertEquals(ParserRef("claude-stream-json", 1), conversation.parser)
+            assertEquals(ParserRef("claude-stream-json", 2), conversation.parser)
             assertEquals("claude", conversation.agent?.cli)
         }
     }

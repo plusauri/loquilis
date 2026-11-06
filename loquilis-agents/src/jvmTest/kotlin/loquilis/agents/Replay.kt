@@ -35,7 +35,7 @@ class EntryLog {
         when (output) {
             is ParseOutput.Append -> { check(output.entry.id !in byId) { "appended twice: ${output.entry.id}" }; byId[output.entry.id] = output.entry }
             is ParseOutput.Update -> { check(output.entry.id in byId) { "update of nothing: ${output.entry.id}" }; byId[output.entry.id] = output.entry }
-            is ParseOutput.Session -> Unit
+            is ParseOutput.Session, is ParseOutput.Ask, is ParseOutput.AskEnded -> Unit
         }
     }
 }

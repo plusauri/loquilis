@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import loquilis.core.kind
+import loquilis.model.Decision
 import loquilis.model.Entry
 import loquilis.model.OutcomeStatus
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
@@ -165,11 +166,107 @@ class LiveChatTest {
         assertTrue(dir.resolve("args").readText().isNotEmpty())
     }
 
+    private val asking: Agent get() = fake(
+        """
+        while read -r line; do
+          printf '%s\n' '{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"ls"},"description":"List"}}'
+          read -r answer
+          printf '%s\n' '{"type":"result","is_error":false,"result":"Done","num_turns":1}'
+        done
+        """.trimIndent(),
+    )
+
+    private fun LiveChat.awaitAsk() = runBlocking { withTimeout(10_000) { asks.first { it.isNotEmpty() } } }.single()
+
+    @Test fun anAskWaitsForItsAnswerAndGoes() {
+        val chat = chat(asking)
+        chat.send("Go")
+        val ask = chat.awaitAsk()
+        assertEquals("Bash", ask.tool)
+        assertIs<ChatStatus.Working>(chat.status.value)
+        chat.answer(ask, Decision.DECISION_ALLOW_ONCE)
+        assertTrue(chat.asks.value.isEmpty())
+        chat.until { it == ChatStatus.Idle }
+        assertEquals(listOf("User", "Permission", "Command", "Text", "TurnEnd"), kinds(chat.conversationId))
+        chat.stop()
+    }
+
+    @Test fun anAskTheAgentWithdrawsGoesAway() {
+        val chat = chat(
+            fake(
+                """
+                read -r line
+                printf '%s\n' '{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}'
+                sleep 0.2
+                printf '%s\n' '{"type":"control_cancel_request","request_id":"r1"}'
+                read -r never
+                """.trimIndent(),
+            ),
+        )
+        chat.send("Go")
+        chat.awaitAsk()
+        runBlocking { withTimeout(10_000) { chat.asks.first { it.isEmpty() } } }
+        chat.stop()
+    }
+
+    @Test fun anAgentThatDiesLeavesNoAskBehind() {
+        val chat = chat(fake("read -r line\nprintf '%s\\n' '{\"type\":\"control_request\",\"request_id\":\"r1\",\"request\":{\"subtype\":\"can_use_tool\",\"tool_name\":\"Bash\",\"input\":{}}}'\nexit 1"))
+        chat.send("Go")
+        chat.until { it is ChatStatus.Failed }
+        assertTrue(chat.asks.value.isEmpty())
+    }
+
+    @Test fun commandsSurviveARecoveryInPlace() {
+        val hanging = fake(
+            """
+            read -r line
+            printf '%s\n' '{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{}}}'
+            read -r answer
+            printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"Going"}]}}'
+            read -r never
+            """.trimIndent(),
+        )
+        val first = chat(hanging)
+        first.send("Go")
+        first.answer(first.awaitAsk(), Decision.DECISION_DENY)
+        runBlocking { withTimeout(10_000) { first.written.first { store.lastSeq(first.conversationId) == 4L } } }
+        first.stop()
+        val before = entries(first.conversationId)
+        assertEquals(0, recover(store, first.conversationId, AT) { newId -> parserFor(store, newId, first.conversationId) })
+        assertEquals(before, entries(first.conversationId))
+    }
+
     @Test fun aNewConversationOpensEmpty() {
         val id = store.newConversation(dir, AT).id
         assertEquals("", store.conversation(id)!!.title)
         assertEquals(dir.toString(), store.conversation(id)!!.workspace_path)
         assertEquals(id, store.conversations(limit = 1).single().id)
+    }
+
+    /** The real agent's own protocol: an answer, then a stop mid-command. Runs only with LOQUILIS_LIVE=1. */
+    @Test
+    @EnabledIfEnvironmentVariable(named = "LOQUILIS_LIVE", matches = "1")
+    fun theRealClaudeAsksAndStops() {
+        val agent = ClaudeAgent(extraArgs = listOf("--setting-sources", "project,local"))
+        val id = store.newConversation(dir, AT, model = "claude-haiku-5-5").id
+        val chat = LiveChat(store, id, agent)
+        chat.send("Use the Bash tool to run exactly: echo hello > note.txt  Then reply DONE.")
+        chat.answer(runBlocking { withTimeout(60_000) { chat.asks.first { it.isNotEmpty() } } }.single(), Decision.DECISION_ALLOW_ONCE)
+        runBlocking { withTimeout(60_000) { chat.status.first { it == ChatStatus.Idle } } }
+        assertEquals("hello", dir.resolve("note.txt").readText().trim())
+
+        chat.send("Use the Bash tool to run exactly: python3 -c \"import time; time.sleep(25)\"  Then reply DONE.")
+        chat.answer(runBlocking { withTimeout(60_000) { chat.asks.first { it.isNotEmpty() } } }.single(), Decision.DECISION_ALLOW_ONCE)
+        Thread.sleep(2000)
+        val started = System.currentTimeMillis()
+        chat.interrupt()
+        runBlocking { withTimeout(20_000) { chat.status.first { it == ChatStatus.Idle } } }
+        println("LIVE stopped in ${System.currentTimeMillis() - started} ms")
+        chat.exchange("Reply with only OK.")
+        chat.stop()
+        entries(id).forEach { println("LIVE ${it.seq} ${it.body!!.kind::class.simpleName} ${it.state}") }
+        assertEquals(3, store.turnCount(id, store.conversation(id)!!.main_branch_id))
+        assertEquals(2, kinds(id).count { it == "Permission" })
     }
 
     /** The real agent across two processes. Costs a few cents, so it runs only with LOQUILIS_LIVE=1. */

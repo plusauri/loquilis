@@ -12,6 +12,7 @@ import kotlinx.coroutines.withTimeout
 import loquilis.core.ContentFactory
 import loquilis.core.EntryKind
 import loquilis.core.kind
+import loquilis.model.Decision
 import loquilis.model.EntryState
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable
 
@@ -21,7 +22,7 @@ class ClaudeLiveSessionTest {
 
     /** A script that answers each line on stdin as `claude` would, and records what it was sent. */
     private fun fake(body: String): List<String> {
-        val script = File(dir, "fake-claude.sh")
+        val script = File.createTempFile("fake-claude", ".sh", dir)
         script.writeText("#!/bin/sh\n$body\n")
         return listOf("/bin/sh", script.path)
     }
@@ -126,6 +127,87 @@ class ClaudeLiveSessionTest {
         assertEquals("it went wrong", ended.errorTail)
         val entries = EntryLog().also { log -> events.filterIsInstance<SessionEvent.Parsed>().forEach { log.apply(it.output) } }.entries
         assertEquals(EntryState.ENTRY_STATE_INTERRUPTED, entries.last().state)
+    }
+
+    private val asks = fake(
+        """
+        read -r line
+        printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"ls"}}]}}'
+        printf '%s\n' '{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","display_name":"Bash","input":{"command":"ls"},"description":"List files","tool_use_id":"t1","permission_suggestions":[{"type":"addRules","rules":[{"toolName":"Bash","ruleContent":"ls *"}],"behavior":"allow","destination":"localSettings"},{"type":"addDirectories","directories":["/w"],"destination":"session"}]}}'
+        read -r answer
+        printf '%s\n' "${'$'}answer" >> "${File(dir, "stdin").path}"
+        printf '%s\n' '{"type":"result","is_error":false,"result":"Done","num_turns":1}'
+        """.trimIndent(),
+    )
+
+    private fun askAndAnswer(decision: Decision): Pair<List<SessionEvent>, String> {
+        val s = session(asks)
+        val seen = java.util.concurrent.CopyOnWriteArrayList<SessionEvent>()
+        val reader = kotlin.concurrent.thread(isDaemon = true) {
+            runBlocking {
+                s.events.collect { e ->
+                    seen += e
+                    ((e as? SessionEvent.Parsed)?.output as? ParseOutput.Ask)?.let { s.answer(it.ask, decision); s.close() }
+                }
+            }
+        }
+        s.send("Go")
+        reader.join(10_000)
+        return seen.toList() to File(dir, "stdin").readText()
+    }
+
+    @Test fun anAskIsRecordedAndAnAllowGoesBackWithTheInput() {
+        val (events, sent) = askAndAnswer(Decision.DECISION_ALLOW_ONCE)
+        val ask = events.filterIsInstance<SessionEvent.Parsed>().map { it.output }.filterIsInstance<ParseOutput.Ask>().single().ask
+        assertEquals("Bash", ask.tool)
+        assertEquals("ls", ask.detail)
+        assertEquals("Bash(ls *)", ask.remember)
+        assertTrue(""""behavior":"allow","updatedInput":{"command":"ls"}""" in sent, sent)
+        assertTrue("updatedPermissions" !in sent, sent)
+        assertTrue(""""request_id":"r1"""" in sent, sent)
+
+        val entries = EntryLog().also { log -> events.filterIsInstance<SessionEvent.Parsed>().forEach { log.apply(it.output) } }.entries
+        assertEquals(listOf("User", "Call", "Permission", "Command", "Text", "TurnEnd"), entries.map { it.body!!.kind::class.simpleName })
+        assertEquals("t1", entries[2].body!!.permission_request!!.call_id)
+        assertEquals(Decision.DECISION_ALLOW_ONCE, entries[3].body!!.app_command!!.permission_decision!!.decision)
+    }
+
+    @Test fun anAlwaysSendsOnlyTheRules() {
+        val (_, sent) = askAndAnswer(Decision.DECISION_ALLOW_ALWAYS)
+        assertTrue(""""updatedPermissions":[{"type":"addRules"""" in sent, sent)
+        assertTrue("addDirectories" !in sent, sent)
+    }
+
+    @Test fun aDenyGoesBackWithAReason() {
+        val (_, sent) = askAndAnswer(Decision.DECISION_DENY)
+        assertTrue(""""behavior":"deny","message":"The person said no."""" in sent, sent)
+    }
+
+    @Test fun anInterruptIsRecordedAndSent() {
+        val stoppable = fake(
+            """
+            read -r line
+            read -r control
+            printf '%s\n' "${'$'}control" >> "${File(dir, "stdin").path}"
+            printf '%s\n' '{"type":"control_response","response":{"subtype":"success","request_id":"interrupt-1","response":{"still_queued":[]}}}'
+            printf '%s\n' '{"type":"result","is_error":true,"subtype":"error_during_execution","num_turns":1}'
+            """.trimIndent(),
+        )
+        val s = session(stoppable)
+        s.send("Go")
+        s.interrupt()
+        s.close()
+        val entries = EntryLog().also { log -> collect(s).filterIsInstance<SessionEvent.Parsed>().forEach { log.apply(it.output) } }.entries
+        assertEquals(listOf("User", "Command", "TurnEnd"), entries.map { it.body!!.kind::class.simpleName })
+        assertTrue(""""subtype":"interrupt"""" in File(dir, "stdin").readText())
+    }
+
+    @Test fun anInterruptWithNothingRunningDoesNothing() {
+        val s = session(answers)
+        s.interrupt()
+        s.close()
+        val appended = collect(s).filterIsInstance<SessionEvent.Parsed>().map { it.output }.filterIsInstance<ParseOutput.Append>()
+        assertEquals(emptyList(), appended)
     }
 
     /** The real agent, one short exchange. Costs a few cents, so it runs only with LOQUILIS_LIVE=1. */

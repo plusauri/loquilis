@@ -13,12 +13,14 @@ import loquilis.agents.AgentSession
 import loquilis.agents.ClaudeLiveSession
 import loquilis.agents.ClaudeStreamParser
 import loquilis.agents.ParseOutput
+import loquilis.agents.PermissionAsk
 import loquilis.agents.SessionEvent
 import loquilis.core.BlobSink
 import loquilis.core.ContentFactory
 import loquilis.core.Ulid
 import loquilis.model.AgentBinding
 import loquilis.model.Conversation
+import loquilis.model.Decision
 import loquilis.model.Outcome
 import loquilis.model.OutcomeStatus
 import loquilis.model.Transport
@@ -94,9 +96,13 @@ class LiveChat(
     private var stopping = false
 
     private val currentStatus = MutableStateFlow<ChatStatus>(ChatStatus.Idle)
+    private val waitingAsks = MutableStateFlow<List<PermissionAsk>>(emptyList())
     private val writes = MutableStateFlow(0L)
 
     val status: StateFlow<ChatStatus> = currentStatus.asStateFlow()
+
+    /** What the agent is waiting to hear, oldest first. */
+    val asks: StateFlow<List<PermissionAsk>> = waitingAsks.asStateFlow()
 
     /** Moves each time something new is on disk. */
     val written: StateFlow<Long> = writes.asStateFlow()
@@ -112,6 +118,18 @@ class LiveChat(
             turnsToGo++
             currentStatus.value = ChatStatus.Working(turnsToGo - 1)
         }
+    }
+
+    fun answer(ask: PermissionAsk, decision: Decision) {
+        synchronized(lock) {
+            session?.answer(ask, decision)
+            waitingAsks.value -= ask
+        }
+    }
+
+    /** Stops the running turn. The agent stays up, and messages waiting go next. */
+    fun interrupt() {
+        synchronized(lock) { session?.interrupt() }
     }
 
     /** Ends the agent now, and returns once what it produced is on disk. */
@@ -161,7 +179,11 @@ class LiveChat(
                         is SessionEvent.Raw -> store.appendRaw(conversationId, event.line)
                         is SessionEvent.Parsed -> {
                             recorder.apply(event.output)
-                            if (endsATurn(event)) turnEnded()
+                            when (val output = event.output) {
+                                is ParseOutput.Ask -> waitingAsks.value += output.ask
+                                is ParseOutput.AskEnded -> waitingAsks.value = waitingAsks.value.filter { it.requestId != output.requestId }
+                                else -> if (endsATurn(event)) turnEnded()
+                            }
                         }
                         is SessionEvent.Ended -> ended(event)
                     }
@@ -177,6 +199,7 @@ class LiveChat(
         (event.output as? ParseOutput.Append)?.entry?.body?.turn_result != null
 
     private fun turnEnded() = synchronized(lock) {
+        waitingAsks.value = emptyList()
         turnsToGo = (turnsToGo - 1).coerceAtLeast(0)
         currentStatus.value = if (turnsToGo > 0) ChatStatus.Working(turnsToGo - 1) else ChatStatus.Idle
     }
@@ -185,6 +208,7 @@ class LiveChat(
         session = null
         reader = null
         turnsToGo = 0
+        waitingAsks.value = emptyList()
         if (stopping || (end.exitCode == 0 && end.unsent.isEmpty())) {
             currentStatus.value = ChatStatus.Idle
             return
