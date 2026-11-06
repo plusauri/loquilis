@@ -27,6 +27,9 @@ class ConversationState(val store: Store, conversationId: String) {
         private set
     var selectedId by mutableStateOf<String?>(null)
 
+    /** True while the Messages view stays on the newest message as the conversation grows. */
+    var following by mutableStateOf(false)
+
     val openTurns = mutableStateMapOf<Int, LoadedTurn>()
     val openTreeTurns = mutableStateMapOf<Int, LoadedTurn>()
     val collapsed = mutableStateSetOf<String>()
@@ -120,14 +123,30 @@ class ConversationState(val store: Store, conversationId: String) {
     fun openHit(row: SearchRow) {
         if (row.hit.conversation_id != pager.conversationId) open(row.hit.conversation_id)
         selectedId = row.hit.entry_id
+        following = false
         show(landing)
     }
 
-    private fun open(conversationId: String) {
+    /** Shows another conversation, or the same one read fresh, from its newest message. */
+    fun open(conversationId: String) {
         pager = ConversationPager(store, conversationId)
         openTurns.clear()
         openTreeTurns.clear()
         collapsed.clear()
+        selectedId = null
+        following = true
+    }
+
+    /**
+     * Shows what [refreshed] read, from [ConversationPager.refreshed]. A turn left open that has since
+     * grown is laid out again, so it stays open with its new rows.
+     */
+    fun show(refreshed: ConversationPager) {
+        if (refreshed.conversationId != pager.conversationId) return
+        val newest = pager.lastOrdinal
+        pager = refreshed
+        openTurns.keys.filter { it >= newest }.forEach { openTurns[it] = refreshed.load(it) }
+        openTreeTurns.keys.filter { it >= newest }.forEach { openTreeTurns[it] = refreshed.load(it) }
     }
 
     /** True when [row] shows the entry [id]. A step shows its call and its result as one. */

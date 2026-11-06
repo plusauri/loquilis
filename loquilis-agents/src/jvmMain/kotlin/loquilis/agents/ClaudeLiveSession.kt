@@ -33,6 +33,9 @@ interface AgentSession : AutoCloseable {
      * turn's entries are never interleaved with the next one's.
      */
     fun send(text: String)
+
+    /** Ends the session now, mid-turn if need be. It still reports [SessionEvent.Ended]. */
+    fun stop()
 }
 
 /**
@@ -40,19 +43,23 @@ interface AgentSession : AutoCloseable {
  * Claude Code holds its context across them and emits one `result` per message. The session sends
  * one message per turn, and records a message when it goes to the agent rather than when it was typed.
  *
- * [command] is the program and any fixed arguments, so a test can stand a script in for `claude`.
+ * [resume] is an earlier session of the agent's own to carry on, and [firstRawSeq] numbers the raw
+ * lines after the ones a stored conversation already has. [command] is the program and any fixed
+ * arguments, so a test can stand a script in for `claude`.
  */
 class ClaudeLiveSession(
     private val parser: AgentParser,
     workingDir: File,
     model: String? = null,
     extraArgs: List<String> = emptyList(),
+    resume: String? = null,
+    firstRawSeq: Long = 1,
     command: List<String> = listOf("claude"),
     private val now: () -> Instant = { java.time.Instant.now() },
 ) : AgentSession {
     private val channel = Channel<SessionEvent>(Channel.UNLIMITED)
     private val lock = Any()
-    private var rawSeq = 0L
+    private var rawSeq = firstRawSeq - 1
     private val stderrTail = ArrayDeque<String>()
     private val waiting = ArrayDeque<String>()
     private var turnRunning = false
@@ -63,6 +70,7 @@ class ClaudeLiveSession(
             addAll(command)
             addAll(listOf("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"))
             if (model != null) addAll(listOf("--model", model))
+            if (resume != null) addAll(listOf("--resume", resume))
             addAll(extraArgs)
         },
     ).directory(workingDir).start()
@@ -117,6 +125,10 @@ class ClaudeLiveSession(
             closing = true
             if (!turnRunning) closeStdin()
         }
+    }
+
+    override fun stop() {
+        process.destroy()
     }
 
     private fun deliver(text: String) {

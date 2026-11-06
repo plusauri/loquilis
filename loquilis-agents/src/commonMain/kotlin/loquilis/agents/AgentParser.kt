@@ -44,4 +44,7 @@ interface AgentParser {
 
     /** The agent stopped mid-turn. Whatever was still running will never finish. */
     fun abandon(at: Instant): List<ParseOutput>
+
+    /** Carries on a stored conversation: what comes next follows [last], its newest entry. */
+    fun continueAfter(last: Entry)
 }

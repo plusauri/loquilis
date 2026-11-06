@@ -94,6 +94,12 @@ class ClaudeStreamParser(
         return open.map { ParseOutput.Update(it.copy(state = EntryState.ENTRY_STATE_INTERRUPTED)) }
     }
 
+    override fun continueAfter(last: Entry) {
+        seq = last.seq
+        spine = last.id
+        lastAt = last.at
+    }
+
     private fun init(event: JsonObject): List<ParseOutput> {
         val info = SessionInfo(
             cliVersion = event.str("claude_code_version").orEmpty(),

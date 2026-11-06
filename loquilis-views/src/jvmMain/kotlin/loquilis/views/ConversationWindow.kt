@@ -26,22 +26,29 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** One conversation from a library: three views of it, and the inspector showing the selected entry. */
+/**
+ * One conversation from a library: three views of it, and the inspector showing the selected entry.
+ * [composer] sits under the views that show the conversation, for a host that can talk to the agent.
+ */
 @Composable
-fun ConversationWindow(state: ConversationState) {
+fun ConversationWindow(state: ConversationState, composer: @Composable () -> Unit = {}) {
     val palette = LocalPalette.current
-    val messagesList = remember(state.pager) { LazyListState() }
-    val treeList = remember(state.pager) { LazyListState() }
+    val conversationId = state.pager.conversationId
+    val messagesList = remember(conversationId) { LazyListState() }
+    val treeList = remember(conversationId) { LazyListState() }
 
     Column(Modifier.fillMaxSize().background(palette.page)) {
         TopBar(state)
         Row(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f).fillMaxHeight()) {
-                when (state.view) {
-                    ConversationView.Messages -> MessagesView(state, messagesList)
-                    ConversationView.Tree -> TreeView(state, treeList)
-                    ConversationView.Search -> SearchView(state)
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    when (state.view) {
+                        ConversationView.Messages -> MessagesView(state, messagesList)
+                        ConversationView.Tree -> TreeView(state, treeList)
+                        ConversationView.Search -> SearchView(state)
+                    }
                 }
+                if (state.view != ConversationView.Search) composer()
             }
             Box(Modifier.width(1.dp).fillMaxHeight().background(palette.line))
             Inspector(state, Modifier.width(420.dp).fillMaxHeight().background(palette.panel))
@@ -58,7 +65,7 @@ private fun TopBar(state: ConversationState) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text(state.pager.conversation.title, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = palette.ink)
+                Text(state.pager.conversation.title.ifEmpty { NEW_CONVERSATION }, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = palette.ink)
                 Text(summaryLine(state.pager), fontSize = 12.sp, color = palette.muted)
             }
             Spacer(Modifier.weight(1f))
@@ -78,7 +85,6 @@ private fun summaryLine(pager: ConversationPager): String = buildList {
     add("${pager.entryCount} entries")
     add("${pager.rawCount} raw lines")
     conversation.total_usage?.let { add(money(it.cost_micro_usd)) }
-    add("read-only")
 }.joinToString(" · ")
 
 /** A row of mutually exclusive choices. */

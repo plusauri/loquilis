@@ -1,6 +1,6 @@
 # Conversation model and storage
 
-- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `loquilis-model/protobuf/loquilis/model/v1/`, `loquilis-model` and `loquilis-agents` (Claude) are built and tested. `loquilis-store` and `loquilis-views` are built and tested. `app` is a thin read-only window over a library or a recorded take.
+- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `loquilis-model/protobuf/loquilis/model/v1/`, `loquilis-model` and `loquilis-agents` (Claude) are built and tested. `loquilis-store` and `loquilis-views` are built and tested. `LiveChat` records a running agent, and `app` is a thin window for talking to one, over the default library, another library, or a recorded take.
 - Rule this works under: `doc/decisions/0001-dependency-direction.md` (no dependency on Tutilis).
 
 ## What the model has to do
@@ -160,6 +160,8 @@ There is one default library, and **File → Open Library** opens another, as in
 
 `AgentParser` turns one agent's stream into entries, a line at a time, so a live turn and a re-parse of stored raw events run the same code. It gives `Append` and `Update` outputs, because an entry can change after it is written: a tool call completes, and text becomes the reply only when the turn ends. `ContentFactory` decides inline or blob for every piece of text, so no adapter can disagree about the threshold.
 
+`LiveChat` is what a host talks to. It starts the agent on the first message, writes what the session produces on one thread, and starts the agent again on the next message after it stops, with `--resume` and the parser and raw numbering carried on from what is stored. A last turn with no result means a crash, so `recover` runs first. Views only read the store: they read the conversation again at most ten times a second while a chat writes.
+
 `ClaudeLiveSession` runs one `claude` process with messages on stdin, and it emits each raw line before what was parsed from it, which is the order the store must keep. It sends one message per turn: a message sent mid-turn waits, and it is recorded when it goes to the agent. Otherwise a turn's entries would interleave with the next one's. Messages that never went out are reported in `Ended.unsent`.
 
 **What Claude's stream showed** (Claude Code 2.1.x, read across 80 turns of recorded sessions):
@@ -175,6 +177,9 @@ There is one default library, and **File → Open Library** opens another, as in
 
 - **Artifacts are not captured yet.** The stream says a tool ran, not what files it left behind. Cogilis finds figures by looking at the workspace, so Loquilis needs a workspace watcher, or the Tutilis-side importer has to supply them. Until then, nothing creates `Artifact` entries, and T8 is unproven. The fixture take has no figures.
 - **`AppCommand` is not sent yet.** Interrupts and permission prompts go over Claude's control protocol, which no recorded stream shows. `PermissionRequest` and `Interrupt` stay unused until that is read and tested.
+- **A tool that needs approval is refused.** With no permission prompts yet, `claude -p` allows what the person's own settings allow and refuses the rest, and the agent reports the refusal in its reply.
+- **Cost after `--resume` is unproven.** The parser takes each turn's cost as the change in `total_cost_usd`, which starts from zero for each process. If a resumed process reports a total that includes earlier sessions, that process's first turn is overcounted.
+- **The conversation list shows the newest 500.** Search still reaches the rest.
 - **Text does not stream by the word.** The session gets whole blocks. Word-by-word text needs `--include-partial-messages` and handling for its events.
 - **Attachments are not sent.** `send` takes text only.
 - **Subagents are tested on hand-written lines only.** No recorded stream has one.

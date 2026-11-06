@@ -7,25 +7,36 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import java.awt.FileDialog
+import java.awt.Frame
 import java.awt.Taskbar
 import java.awt.image.BufferedImage
 import java.nio.file.Path
 import javax.imageio.ImageIO
-import loquilis.views.ConversationState
-import loquilis.views.ConversationWindow
+import loquilis.store.ClaudeAgent
+import loquilis.views.LibraryState
+import loquilis.views.LibraryWindow
 import loquilis.views.ReviewTheme
 
-/** Opens the bundled take, or the library file or take folder named as the first argument. */
+/**
+ * Opens the default library, or what the first argument names: a library file, a take folder, or
+ * `--sample` for the bundled take.
+ */
 fun main(args: Array<String>) {
     // Gradle passes this as true to what it starts, which keeps a Mac app out of the Dock and Cmd-Tab.
     // It has to change before AWT loads.
     System.setProperty("apple.awt.UIElement", "false")
     val icon = readAppIcon()
     showInDock(icon)
-    val library = openLibrary(args.firstOrNull()?.let { Path.of(it) })
+    val library = openArgument(args.firstOrNull())
+    val state = LibraryState(library.store, ClaudeAgent(), library.conversationId)
     // A hook, not a finally: application() ends the process itself when the window closes.
-    Runtime.getRuntime().addShutdownHook(Thread(library::close))
-    val state = ConversationState(library.store, library.conversationId)
+    Runtime.getRuntime().addShutdownHook(
+        Thread {
+            state.close()
+            library.close()
+        },
+    )
     application {
         Window(
             onCloseRequest = ::exitApplication,
@@ -33,9 +44,18 @@ fun main(args: Array<String>) {
             icon = remember { BitmapPainter(icon.toComposeImageBitmap()) },
             state = rememberWindowState(width = 1320.dp, height = 880.dp),
         ) {
-            ReviewTheme { ConversationWindow(state) }
+            ReviewTheme { LibraryWindow(state) { chooseFolder()?.let(state::newConversation) } }
         }
     }
+}
+
+/** Asks where an agent should work. A Mac's file dialog picks folders only while this property is set. */
+private fun chooseFolder(): Path? {
+    System.setProperty("apple.awt.fileDialogForDirectories", "true")
+    val dialog = FileDialog(null as Frame?, "Where should the agent work?", FileDialog.LOAD)
+    dialog.isVisible = true
+    System.clearProperty("apple.awt.fileDialogForDirectories")
+    return dialog.file?.let { Path.of(dialog.directory, it) }
 }
 
 /** The Plusauri mark, until Loquilis has its own. */

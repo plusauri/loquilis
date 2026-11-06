@@ -68,6 +68,18 @@ class ConversationPager(private val store: Store, val conversationId: String) {
     val lastOrdinal: Int = turnCount
     val heldTurns: Int get() = synchronized(turns) { turns.size }
 
+    /**
+     * The same conversation as it stands now, for a view of one that is growing. Call off the main
+     * thread. Turns before the last are finished, so their decoded rows carry over, and the newest
+     * turn is read here so it never shows half drawn.
+     */
+    fun refreshed(): ConversationPager {
+        val next = ConversationPager(store, conversationId)
+        synchronized(turns) { next.turns.putAll(turns.filterKeys { it < lastOrdinal }) }
+        if (next.entryCount > 0) next.load(next.lastOrdinal)
+        return next
+    }
+
     fun summary(ordinal: Int): TurnSummary? {
         if (ordinal !in 1..turnCount) return null
         val page = (ordinal - 1) / SUMMARY_PAGE

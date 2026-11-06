@@ -8,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import loquilis.store.SqliteStore
 import loquilis.store.recordTake
@@ -22,7 +23,7 @@ class LibraryTest {
     @Test
     fun withNoSourceTheBundledTakeOpensFromAScratchLibraryThatCloseRemoves() {
         val library = openLibrary(null)
-        assertTrue(library.store.lastSeq(library.conversationId) > 0)
+        assertTrue(library.store.lastSeq(assertNotNull(library.conversationId)) > 0)
         val scratch = assertNotNull(library.scratch)
         assertTrue(scratch.exists())
         library.close()
@@ -44,16 +45,45 @@ class LibraryTest {
         val take = dir.resolve("take").also(Files::createDirectory)
         listOf("conversation.json", "raw.jsonl.gz").forEach { name -> fixture(name).use { Files.copy(it, take.resolve(name)) } }
         val library = openLibrary(take)
-        assertTrue(library.store.lastSeq(library.conversationId) > 0)
+        assertTrue(library.store.lastSeq(assertNotNull(library.conversationId)) > 0)
         library.close()
         assertTrue(take.resolve("conversation.json").exists())
     }
 
     @Test
-    fun aLibraryWithNoConversationsSaysSo() {
+    fun anEmptyLibraryOpensWithNothingToShow() {
         val path = dir.resolve("empty.sqlite")
         SqliteStore.open(path).close()
-        assertFailsWith<IllegalStateException> { openLibrary(path) }
+        val library = openLibrary(path)
+        assertNull(library.conversationId)
+        library.close()
+        assertTrue(path.exists())
+    }
+
+    @Test
+    fun noArgumentCreatesTheDefaultLibraryAndKeepsIt() {
+        val path = dir.resolve("plusauri/loquilis/library.sqlite")
+        val library = openArgument(null, path)
+        assertNull(library.conversationId)
+        assertNull(library.scratch)
+        library.close()
+        assertTrue(path.exists())
+    }
+
+    @Test
+    fun theSampleArgumentOpensTheBundledTake() {
+        val library = openArgument(SAMPLE, dir.resolve("unused.sqlite"))
+        assertTrue(library.store.lastSeq(assertNotNull(library.conversationId)) > 0)
+        library.close()
+        assertFalse(dir.resolve("unused.sqlite").exists())
+    }
+
+    @Test
+    fun theDefaultLibraryLivesInEachSystemsAppData() {
+        val home = Path.of("/home/someone")
+        assertEquals(home.resolve("Library/Application Support/plusauri/loquilis/library.sqlite"), defaultLibraryPath(home, "Mac OS X", null))
+        assertEquals(home.resolve(".local/share/plusauri/loquilis/library.sqlite"), defaultLibraryPath(home, "Linux", null))
+        assertEquals(Path.of("/data/plusauri/loquilis/library.sqlite"), defaultLibraryPath(home, "Windows 11", "/data"))
     }
 
     @Test

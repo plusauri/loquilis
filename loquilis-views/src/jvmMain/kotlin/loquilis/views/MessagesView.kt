@@ -23,6 +23,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +46,19 @@ fun MessagesView(state: ConversationState, list: LazyListState) {
     LaunchedEffect(Unit) {
         val at = state.selectedId?.let(state::messageIndex) ?: return@LaunchedEffect
         list.scrollToItem(at)
+    }
+
+    // Only a hand on the list changes this, so a list growing under a still reader never counts.
+    LaunchedEffect(list) {
+        snapshotFlow { list.isScrollInProgress to list.canScrollForward }
+            .collect { (scrolling, more) -> if (scrolling) state.following = !more }
+    }
+
+    LaunchedEffect(pager, state.following) {
+        if (state.following) {
+            withFrameNanos {}
+            list.scrollToItem((list.layoutInfo.totalItemsCount - 1).coerceAtLeast(0), Int.MAX_VALUE)
+        }
     }
 
     Box(Modifier.fillMaxSize()) {

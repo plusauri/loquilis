@@ -34,5 +34,7 @@ internal fun LazyListScope.turnItems(
 @Composable
 internal fun rememberTurn(pager: ConversationPager, ordinal: Int): State<LoadedTurn?> =
     produceState(pager.cached(ordinal), pager, ordinal) {
+        // A new pager may hold a newer turn, or another conversation's: never keep showing the old one.
+        value = pager.cached(ordinal)
         if (value == null) value = withContext(Dispatchers.IO) { pager.load(ordinal) }
     }
