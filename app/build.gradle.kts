@@ -38,10 +38,11 @@ compose.desktop {
 // A window loads classes as it needs them, so a rebuild under an open one crashes it. This one runs from
 // its own copy of the program, which a later build never touches.
 val runStage = layout.buildDirectory.dir("run-stage")
+val thisRun = System.currentTimeMillis().toString()
 
 val stageRun by tasks.registering(Sync::class) {
     from(tasks.named("jvmJar"), configurations.named("jvmRuntimeClasspath"))
-    into(runStage.map { it.dir(System.currentTimeMillis().toString()) })
+    into(runStage.map { it.dir(thisRun) })
     doFirst {
         // An open window keeps the files it has open, so its folder can go too.
         runStage.get().asFile.listFiles()?.forEach { it.deleteRecursively() }
@@ -51,7 +52,7 @@ val stageRun by tasks.registering(Sync::class) {
 tasks.register<JavaExec>("runWindow") {
     dependsOn(stageRun)
     mainClass = "loquilis.app.MainKt"
-    classpath = files(stageRun.map { fileTree(it.destinationDir) })
+    classpath = fileTree(runStage.map { it.dir(thisRun) })
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
     jvmArgs("-Xdock:name=Loquilis", "-Dcompose.application.configure.swing.globals=true")
 }
