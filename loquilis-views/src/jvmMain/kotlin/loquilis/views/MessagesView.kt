@@ -21,9 +21,12 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -132,7 +135,11 @@ private fun UserBubble(text: String, selected: Boolean, onClick: () -> Unit) {
     val palette = LocalPalette.current
     Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.End) {
         Bubble(palette.userBubble, RoundedCornerShape(18.dp, 18.dp, 4.dp, 18.dp), USER_WIDTH, selected, onClick) {
-            SelectionContainer { Text(text, color = palette.userInk, fontSize = 14.sp, lineHeight = 20.sp) }
+            // The usual selection color is blue, which cannot be seen on this bubble.
+            val selection = TextSelectionColors(palette.userInk, palette.userInk.copy(alpha = 0.35f))
+            CompositionLocalProvider(LocalTextSelectionColors provides selection) {
+                SelectionContainer { Text(text, color = palette.userInk, fontSize = 14.sp, lineHeight = 20.sp) }
+            }
         }
     }
 }
