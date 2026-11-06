@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -16,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -59,10 +61,10 @@ fun Inspector(state: ConversationState, modifier: Modifier) {
             val scroll = remember(entry.id) { androidx.compose.foundation.ScrollState(0) }
             Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(kindLabel(entry), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = palette.ink)
-                Fields(inspection, state)
-                inspection.sections.forEach { Code("${it.label} · ${where(it.content, it.text)}", it.text) }
+                SelectionContainer { Fields(inspection, state) }
+                inspection.sections.forEach { Code("${it.label} · ${where(it.content, it.text)}", "Copy ${it.label.lowercase()}", it.text) }
                 val raw = inspection.raw
-                if (raw.isNotEmpty()) Code("Raw (${raw.size})", raw.joinToString("\n\n", transform = ::pretty))
+                if (raw.isNotEmpty()) Code("Raw (${raw.size})", "Copy raw lines", raw.joinToString("\n\n", transform = ::pretty))
             }
         }
     }
@@ -106,10 +108,13 @@ private fun Field(name: String, value: String, onClick: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun Code(label: String, text: String) {
+private fun Code(label: String, copyName: String, text: String) {
     val palette = LocalPalette.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, color = palette.muted, fontSize = 12.sp)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(label, color = palette.muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            CopyButton(copyName, text)
+        }
         SelectionContainer {
             Text(shown(text), color = palette.ink, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = FontFamily.Monospace)
         }

@@ -19,12 +19,12 @@ if [[ $# -gt 1 ]]; then
 fi
 
 if [[ "${1:-}" == "--sample" ]]; then
-  exec "$root/gradlew" -p "$root" :app:run --args="--sample"
+  exec "$root/gradlew" -p "$root" :app:runWindow --args="--sample"
 fi
 
 if [[ $# -eq 1 ]]; then
   source="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
-  exec "$root/gradlew" -p "$root" :app:run --args="$source"
+  exec "$root/gradlew" -p "$root" :app:runWindow --args="$source"
 fi
 
-exec "$root/gradlew" -p "$root" :app:run
+exec "$root/gradlew" -p "$root" :app:runWindow

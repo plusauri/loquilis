@@ -164,6 +164,8 @@ There is one default library, and **File → Open Library** opens another, as in
 
 A reply is read as GitHub-flavored Markdown by `org.jetbrains:markdown` and laid out by our own `MarkdownView`, off the main thread with the rest of its turn. Only what a browser or mail app would open becomes a link, since the agent writes them. The inspector, the Tree and search keep showing the text as stored.
 
+Copying has two levels. `CopyButton` is the one way to copy a whole item, and it sits on each section of the inspector, so the stored text comes out whole with its marks. Text in a bubble can be dragged over and copied with the usual key. A bubble takes its click through `tapWithoutDrag`, because `clickable` swallows the drag that selection needs.
+
 A permission request is an entry, and so is the answer, as an `AppCommand`. `ParseOutput.Ask` carries each possible answer as the exact line to send, so a host offers the choices without knowing the agent's protocol. "Always" passes back the rules the agent suggested, which `claude` writes to the workspace's `.claude/settings.local.json`. App commands are not in the raw log, so `recover` replays them from their entries, as it does user messages.
 
 `ClaudeLiveSession` runs one `claude` process with messages on stdin, and it emits each raw line before what was parsed from it, which is the order the store must keep. It sends one message per turn: a message sent mid-turn waits, and it is recorded when it goes to the agent. Otherwise a turn's entries would interleave with the next one's. Messages that never went out are reported in `Ended.unsent`.

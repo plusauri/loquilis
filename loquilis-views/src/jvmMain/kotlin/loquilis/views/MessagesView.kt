@@ -4,6 +4,8 @@ import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,12 +27,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -151,10 +156,33 @@ private fun Bubble(fill: Color, shape: RoundedCornerShape, width: Dp, selected: 
             .clip(shape)
             .background(fill)
             .then(if (selected) Modifier.border(2.dp, palette.ink, shape) else Modifier)
-            .clickable(onClick = onClick)
+            .tapWithoutDrag(onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
     ) {
         content()
+    }
+}
+
+/**
+ * A click for something whose text can be selected. It listens last and takes nothing, so a press and
+ * a drag still reach the selection, and only a press that stays put counts as a tap.
+ */
+@Composable
+private fun Modifier.tapWithoutDrag(onTap: () -> Unit): Modifier {
+    val tap by rememberUpdatedState(onTap)
+    return pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
+            var moved = false
+            while (true) {
+                val change = awaitPointerEvent(PointerEventPass.Final).changes.firstOrNull { it.id == down.id } ?: break
+                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                if (!change.pressed) {
+                    if (!moved) tap()
+                    break
+                }
+            }
+        }
     }
 }
 
