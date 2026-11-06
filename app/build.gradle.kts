@@ -44,8 +44,11 @@ val stageRun by tasks.registering(Sync::class) {
     from(tasks.named("jvmJar"), configurations.named("jvmRuntimeClasspath"))
     into(runStage.map { it.dir(thisRun) })
     doFirst {
-        // An open window keeps the files it has open, so its folder can go too.
-        runStage.get().asFile.listFiles()?.forEach { it.deleteRecursively() }
+        // An open window keeps its folder: it opens each jar only when it first looks in it.
+        val running = ProcessHandle.allProcesses().toList().mapNotNull { it.info().commandLine().orElse(null) }
+        runStage.get().asFile.listFiles()
+            ?.filter { folder -> running.none { folder.path in it } }
+            ?.forEach { it.deleteRecursively() }
     }
 }
 

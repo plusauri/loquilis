@@ -26,7 +26,8 @@ import org.junit.jupiter.api.io.TempDir
 /**
  * A long synthetic conversation, on the 256 MB test heap. By default it is small enough for every run.
  * `LOQUILIS_SCALE=1` runs the design's full size: 100k entries and 1 GB of output, which takes minutes.
- * Word-salad output keeps compression and the search index from having it easy.
+ * Word-salad output keeps compression and the search index from having it easy. `LOQUILIS_SCALE_KEEP=<file>`
+ * leaves the library there, to open in the window.
  */
 class ScaleTest {
     @TempDir
@@ -74,9 +75,9 @@ class ScaleTest {
 
     @Test
     fun aLongConversationStaysFastAndSmallInMemory() {
-        val path = dir.resolve("library.sqlite")
+        val path = System.getenv("LOQUILIS_SCALE_KEEP")?.let(Path::of) ?: dir.resolve("library.sqlite")
         val (_, built) = measureTimedValue { SqliteStore.open(path).use(::build) }
-        val onDisk = Files.walk(dir).use { paths -> paths.filter(Files::isRegularFile).mapToLong(Files::size).sum() }
+        val onDisk = Files.walk(path.parent).use { paths -> paths.filter(Files::isRegularFile).mapToLong(Files::size).sum() }
         println("scale: wrote $entryCount entries in $built, ${onDisk / (1024 * 1024)} MB on disk")
 
         val store = within(1000.milliseconds, "opening") { SqliteStore.open(path) }
