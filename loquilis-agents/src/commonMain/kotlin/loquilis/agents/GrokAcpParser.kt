@@ -119,21 +119,23 @@ class GrokAcpParser(
         val current = run ?: Run(thinking, rawSeq, at).also { run = it }
         current.text.append(text)
         current.last = rawSeq
-        return written
+        return if (thinking) written else written + ParseOutput.Writing(current.text.toString().trimStart())
     }
 
     private fun endRun(): List<ParseOutput> {
         val ended = run ?: return emptyList()
         run = null
         val text = ended.text.toString().trim()
-        if (text.isEmpty()) return emptyList()
+        val shown = if (ended.thinking) emptyList() else listOf(ParseOutput.Writing(""))
+        if (text.isEmpty()) return shown
         val raw = RawRange(ended.first, ended.last)
         if (ended.thinking) {
             val body = EntryBody(thinking = Thinking(contents.text(text)))
             return listOf(chain.append(ended.at, Author.AUTHOR_AGENT, body, raw, visibility = Visibility.VISIBILITY_PRIVATE))
         }
         val body = EntryBody(agent_text = AgentText(contents.text(text), TextRole.TEXT_ROLE_NARRATION))
-        return listOf(chain.append(ended.at, Author.AUTHOR_AGENT, body, raw).also { textSinceLastTool += it.entry })
+        // The entry first, so a reader never finds neither it nor the text it replaces.
+        return listOf(chain.append(ended.at, Author.AUTHOR_AGENT, body, raw).also { textSinceLastTool += it.entry }) + shown
     }
 
     private fun toolCall(update: JsonObject, at: Instant, raw: RawRange): ParseOutput {

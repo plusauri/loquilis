@@ -30,6 +30,9 @@ class ConversationState(val store: Store, conversationId: String) {
     /** True while the Messages view stays on the newest message as the conversation grows. */
     var following by mutableStateOf(false)
 
+    /** The reply so far, while the agent writes it. */
+    var writing by mutableStateOf("")
+
     val openTurns = mutableStateMapOf<Int, LoadedTurn>()
     val openTreeTurns = mutableStateMapOf<Int, LoadedTurn>()
     val collapsed = mutableStateSetOf<String>()

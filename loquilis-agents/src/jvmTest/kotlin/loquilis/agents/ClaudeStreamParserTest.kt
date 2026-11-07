@@ -37,6 +37,24 @@ class ClaudeStreamParserTest {
 
     private val result = """{"type":"result","subtype":"success","is_error":false,"result":"Done","duration_ms":1500,"num_turns":1,"total_cost_usd":0.25,"usage":{"input_tokens":2,"output_tokens":3}}"""
 
+    private fun delta(type: String, field: String, text: String, parent: String = "null") =
+        """{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"$type","$field":"$text"}},"parent_tool_use_id":$parent}"""
+    private fun writing(outputs: List<ParseOutput>) = outputs.filterIsInstance<ParseOutput.Writing>().map { it.text }
+
+    @Test fun theReplyShowsAsItIsWrittenAndClearsAfterItsEntry() {
+        assertEquals(listOf("Hel"), writing(feed(delta("text_delta", "text", "Hel"))))
+        assertEquals(listOf("Hello"), writing(feed(delta("text_delta", "text", "lo"))))
+        assertTrue(log.entries.isEmpty())
+        val done = feed(assistant(text("Hello")))
+        assertEquals(listOf(""), writing(done))
+        assertIs<ParseOutput.Append>(done.first())
+    }
+
+    @Test fun thinkingAndSubagentTextAreNotTheReply() {
+        assertEquals(emptyList(), writing(feed(delta("thinking_delta", "thinking", "hmm"))))
+        assertEquals(emptyList(), writing(feed(delta("text_delta", "text", "inner", parent = "\"t1\""))))
+    }
+
     @Test fun textAfterTheLastToolIsTheReply() {
         feed(assistant(text("Looking")))
         feed(assistant(toolUse("t1", "Bash", """{"command":"ls","description":"List files"}""")))

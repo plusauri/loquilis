@@ -71,7 +71,7 @@ fun MessagesView(state: ConversationState, list: LazyListState) {
             .collect { (scrolling, more) -> if (scrolling) state.following = !more }
     }
 
-    LaunchedEffect(pager, state.following) {
+    LaunchedEffect(pager, state.following, state.writing) {
         if (state.following) {
             withFrameNanos {}
             list.scrollToItem((list.layoutInfo.totalItemsCount - 1).coerceAtLeast(0), Int.MAX_VALUE)
@@ -95,6 +95,7 @@ fun MessagesView(state: ConversationState, list: LazyListState) {
                     items(turn.messages, key = { it.key }) { row -> TurnRow(state, turn, row) }
                 },
             )
+            if (state.writing.isNotEmpty()) item(key = "writing") { WritingBubble(state.writing) }
         }
         VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
     }
@@ -115,6 +116,12 @@ private fun ClosedTurn(state: ConversationState, ordinal: Int) {
             }
         }
     }
+}
+
+/** The reply on its way, laid out as it will be once it arrives, so nothing jumps when it does. */
+@Composable
+private fun WritingBubble(text: String) {
+    AgentBubble(remember(text) { markdownBlocks(text) }, selected = false) {}
 }
 
 @Composable

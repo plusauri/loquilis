@@ -116,6 +116,7 @@ class LiveChat(
     private val currentStatus = MutableStateFlow<ChatStatus>(ChatStatus.Idle)
     private val waitingAsks = MutableStateFlow<List<PermissionAsk>>(emptyList())
     private val writes = MutableStateFlow(0L)
+    private val beingWritten = MutableStateFlow("")
 
     val status: StateFlow<ChatStatus> = currentStatus.asStateFlow()
 
@@ -124,6 +125,9 @@ class LiveChat(
 
     /** Moves each time something new is on disk. */
     val written: StateFlow<Long> = writes.asStateFlow()
+
+    /** The reply so far, held only here until its entry is stored. Empty when none is on its way. */
+    val writing: StateFlow<String> = beingWritten.asStateFlow()
 
     fun send(text: String) {
         synchronized(lock) {
@@ -200,6 +204,7 @@ class LiveChat(
                             when (val output = event.output) {
                                 is ParseOutput.Ask -> waitingAsks.value += output.ask
                                 is ParseOutput.AskEnded -> waitingAsks.value = waitingAsks.value.filter { it.requestId != output.requestId }
+                                is ParseOutput.Writing -> beingWritten.value = output.text
                                 else -> if (endsATurn(event)) turnEnded()
                             }
                         }
@@ -227,6 +232,7 @@ class LiveChat(
         reader = null
         turnsToGo = 0
         waitingAsks.value = emptyList()
+        beingWritten.value = ""
         if (stopping || (end.exitCode == 0 && end.unsent.isEmpty())) {
             currentStatus.value = ChatStatus.Idle
             return

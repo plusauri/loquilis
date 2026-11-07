@@ -50,6 +50,23 @@ class GrokAcpParserTest {
         assertEquals(RawRange(1, 3), log.entries.first().raw)
     }
 
+    private fun writing(outputs: List<ParseOutput>) = outputs.filterIsInstance<ParseOutput.Writing>().map { it.text }
+
+    @Test fun theReplyShowsAsItIsWrittenAndClearsAfterItsEntry() {
+        val shown = listOf("Hel", "lo").flatMap { part ->
+            writing(feed(update("""{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"$part"}}""")))
+        }
+        assertEquals(listOf("Hel", "Hello"), shown)
+        val end = feed(ended)
+        assertEquals(listOf(""), writing(end))
+        assertTrue(end.indexOfFirst { it is ParseOutput.Append } < end.indexOfFirst { it is ParseOutput.Writing })
+    }
+
+    @Test fun thinkingIsNeverShownAsWriting() {
+        assertEquals(emptyList(), writing(feed(update("""{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"hmm"}}"""))))
+        assertEquals(emptyList(), writing(feed(ended)))
+    }
+
     @Test fun textAfterTheLastToolIsTheReply() {
         words("Looking")
         call("t1")

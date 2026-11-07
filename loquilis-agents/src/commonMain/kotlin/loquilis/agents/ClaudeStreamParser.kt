@@ -78,6 +78,7 @@ class ClaudeStreamParser(
     private var lastAt: Instant? = null
     private val callsById = mutableMapOf<String, Entry>()
     private val textSinceLastTool = mutableListOf<Entry>()
+    private val writing = StringBuilder()
 
     override fun userMessage(text: String, at: Instant): List<ParseOutput> {
         lastAt = at
@@ -97,10 +98,11 @@ class ClaudeStreamParser(
         lastAt = at
         return when (event.str("type")) {
             "system" -> if (event.str("subtype") == "init") init(event) else emptyList()
-            "assistant" -> assistant(event, at, raw)
+            "stream_event" -> streamed(event)
+            "assistant" -> assistant(event, at, raw) + doneWriting()
             "user" -> user(event, at, raw)
             "rate_limit_event" -> rateLimit(event, at, raw)
-            "result" -> result(event, at, raw)
+            "result" -> result(event, at, raw) + doneWriting()
             "control_request" -> controlRequest(event, at, raw)
             "control_cancel_request" -> event.str("request_id")?.let { listOf(ParseOutput.AskEnded(it)) }.orEmpty()
             else -> emptyList()
@@ -111,13 +113,29 @@ class ClaudeStreamParser(
         val open = callsById.values.filter { it.state == EntryState.ENTRY_STATE_STREAMING }
         callsById.clear()
         textSinceLastTool.clear()
-        return open.map { ParseOutput.Update(it.copy(state = EntryState.ENTRY_STATE_INTERRUPTED)) }
+        return doneWriting() + open.map { ParseOutput.Update(it.copy(state = EntryState.ENTRY_STATE_INTERRUPTED)) }
     }
 
     override fun continueAfter(last: Entry) {
         chain.continueAfter(last)
         costSoFarMicroUsd = null
         lastAt = last.at
+    }
+
+    /** A piece of the reply on its way. A subagent's text is not the reply, and thinking stays private. */
+    private fun streamed(event: JsonObject): List<ParseOutput> {
+        if (event.str("parent_tool_use_id") != null) return emptyList()
+        val delta = (event["event"] as? JsonObject)?.get("delta") as? JsonObject ?: return emptyList()
+        if (delta.str("type") != "text_delta") return emptyList()
+        writing.append(delta.str("text").orEmpty())
+        return listOf(ParseOutput.Writing(writing.toString()))
+    }
+
+    /** Comes after the entry that replaces the text, so a reader never finds neither. */
+    private fun doneWriting(): List<ParseOutput> {
+        if (writing.isEmpty()) return emptyList()
+        writing.clear()
+        return listOf(ParseOutput.Writing(""))
     }
 
     private fun controlRequest(event: JsonObject, at: Instant, raw: RawRange): List<ParseOutput> {

@@ -27,7 +27,7 @@ class Recorder(private val store: Store, private val conversationId: String, pri
         when (output) {
             is ParseOutput.Append -> store.appendEntry(output.entry)
             is ParseOutput.Update -> store.updateEntry(output.entry)
-            is ParseOutput.Ask, is ParseOutput.AskEnded -> Unit
+            is ParseOutput.Ask, is ParseOutput.AskEnded, is ParseOutput.Writing -> Unit
             is ParseOutput.Session -> {
                 val conversation = checkNotNull(store.conversation(conversationId)) { "no conversation $conversationId" }
                 val agent = conversation.agent ?: AgentBinding()
@@ -68,7 +68,7 @@ fun recover(store: Store, conversationId: String, at: Instant, parserOf: (newId:
         when (output) {
             is ParseOutput.Append -> replayed[output.entry.id] = output.entry
             is ParseOutput.Update -> replayed[output.entry.id] = output.entry
-            is ParseOutput.Session, is ParseOutput.Ask, is ParseOutput.AskEnded -> Unit
+            is ParseOutput.Session, is ParseOutput.Ask, is ParseOutput.AskEnded, is ParseOutput.Writing -> Unit
         }
     }
 

@@ -25,7 +25,7 @@ class ClaudeLiveSession(
     ClaudeProtocol(),
     buildList {
         addAll(command)
-        addAll(listOf("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"))
+        addAll(listOf("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", "--include-partial-messages"))
         if (model != null) addAll(listOf("--model", model))
         if (resume != null) addAll(listOf("--resume", resume))
         addAll(extraArgs)

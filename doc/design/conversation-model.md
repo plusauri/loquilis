@@ -17,7 +17,7 @@ Loquilis records conversations with coding agents and shows them in several view
 | L4 | Fast | Opening, scrolling and appending each touch only what is on screen. Nothing ever scans the whole conversation. |
 | L5 | A tree view | Entries have parents. A conversation can branch (edit and resend, fork from a turn), and a turn holds nested work (tool calls, subagents). |
 | L6 | Search across every conversation | One full-text index over messages, tool inputs and tool outputs, for every conversation in the library. |
-| L7 | Live streaming | A turn grows while you watch. The model has an in-progress state, and partial text is a first-class entry state. |
+| L7 | Live streaming | A turn grows while you watch. The model has an in-progress state for tool calls. Text on its way is shown live and stored once whole, with every piece in the raw log. |
 | L8 | Many agents | One adapter per agent, each normalizing its stream into the same entries. Claude and Grok hold a live session on stdin; Codex may resume one process per turn. |
 | L9 | A library others build on, from other languages too | Core types stay small and general, and they are defined in a language-neutral schema. Bespoke data goes in typed extensions. |
 
@@ -138,7 +138,7 @@ A test asserts that the columns match the protos, as `DossierSchemaTest` does in
 
 **Paging (L3, L4).** A view asks for `turns(conversation, branch, range)` and gets `TurnSummary` rows. It asks for bodies (`entry(id)` and `blob(ref)`) only when something is on screen or opened. The client cache is a bounded LRU of bodies. Nothing loads a whole conversation, and the memory a conversation uses stays the same no matter how long it is.
 
-**Append path (L7).** The adapter writes the raw line first, then upserts the entry. While text streams, a `STREAMING` entry is updated in place, throttled to about 10 Hz on disk and kept live in memory. `Recorder` commits a line and its entries together, so a crash cannot leave an entry without its line. A live session writes the two separately, so `recover` replays the raw log through a fresh parser, keeps existing ids, and closes tool calls left open as interrupted.
+**Append path (L7).** The adapter writes the raw line first, then upserts the entry. While text streams, the parser emits `ParseOutput.Writing` with the reply so far. `LiveChat` holds that in memory for the window, which shows it at about 10 Hz, and nothing is written but the raw lines. The entry arrives whole, so a stored reply is never half a reply, and `Writing` clears only after the entry, so a reader always finds one or the other. `Recorder` commits a line and its entries together, so a crash cannot leave an entry without its line. A live session writes the two separately, so `recover` replays the raw log through a fresh parser, keeps existing ids, and closes tool calls left open as interrupted.
 
 **Export.** A folder holding `manifest.json`, `entries.jsonl`, `blobs/` and `raw.jsonl.gz` (`export.proto`). That folder is what a git records repo such as `plusauri/cogilis-conversations` would hold. The folder, not the SQLite file, is the interchange format. An export leaves out private entries unless asked. Their raw lines stay as blank lines, so thinking never leaks through the raw log and every other entry's `RawRange` still holds.
 

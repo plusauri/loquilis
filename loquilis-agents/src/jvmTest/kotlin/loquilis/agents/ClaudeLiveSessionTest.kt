@@ -60,7 +60,7 @@ class ClaudeLiveSessionTest {
         assertEquals(listOf("User", "Text", "TurnEnd", "User", "Text", "TurnEnd"), kinds)
 
         val args = File(dir, "args").readText()
-        assertTrue("--input-format stream-json --output-format stream-json --verbose --model a-model" in args, args)
+        assertTrue("--input-format stream-json --output-format stream-json --verbose --include-partial-messages --model a-model" in args, args)
         val sent = File(dir, "stdin").readLines()
         assertEquals(2, sent.size)
         assertTrue("""First \"quoted\"""" in sent[0], sent[0])

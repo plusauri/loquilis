@@ -205,6 +205,32 @@ class LibraryWindowTest {
         state.close()
     }
 
+    @Test fun aReplyShowsWhileItIsWrittenAndIsNotShownTwice() = runDesktopComposeUiTest(1100, 700) {
+        val delta = """{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Plovers are"}},"parent_tool_use_id":null}"""
+        val state = open(
+            fake(
+                """
+                while read -r line; do
+                  printf '%s\n' '$delta'
+                  sleep 0.8
+                  printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"Plovers are shorebirds."}]}}'
+                  printf '%s\n' '{"type":"result","is_error":false,"result":"Plovers are shorebirds.","num_turns":1}'
+                done
+                """.trimIndent(),
+            ),
+        )
+        onNodeWithText("New conversation").performClick()
+        waitForIdle()
+        write("Plovers?")
+        onNodeWithText("Send").performClick()
+        showing("Plovers are")
+        showing("Plovers are shorebirds.")
+        waitForIdle()
+        waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Plovers are").fetchSemanticsNodes().isEmpty() }
+        assertEquals(1, onAllNodesWithText("Plovers are shorebirds.").fetchSemanticsNodes().size)
+        state.close()
+    }
+
     @Test fun aSecondConversationKeepsItsOwnDraft() = runDesktopComposeUiTest(1100, 700) {
         val state = open(answers)
         onNodeWithText("New conversation").performClick()

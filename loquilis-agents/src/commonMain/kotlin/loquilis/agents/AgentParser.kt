@@ -20,6 +20,12 @@ sealed interface ParseOutput {
 
     /** The agent no longer needs an answer to [requestId]. */
     data class AskEnded(val requestId: String) : ParseOutput
+
+    /**
+     * The reply as far as it has been written, empty when nothing is being written. It is for showing
+     * only and is never stored: the raw lines hold it, and the entry that follows replaces it.
+     */
+    data class Writing(val text: String) : ParseOutput
 }
 
 data class SessionInfo(

@@ -84,7 +84,10 @@ fun LibraryWindow(state: LibraryState, onNewConversation: (agent: String) -> Uni
 private fun Follow(state: LibraryState, showing: ConversationState, id: String) {
     LaunchedEffect(id) {
         state.chat(id).written.sample(REFRESH_MILLIS).collect {
+            val writing = state.chat(id).writing.value
             showing.show(withContext(Dispatchers.IO) { showing.pager.refreshed() })
+            // Set with the entries read after it, so a finished reply never leaves the screen for a moment.
+            showing.writing = writing
             state.refreshList()
         }
     }
