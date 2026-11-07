@@ -68,6 +68,8 @@ fun messagesOf(entries: List<Entry>, firstTurn: Int = 0): List<MessageRow> {
     val closing = mutableListOf<MessageRow>()
 
     fun endTurn() {
+        // A fold holding only the Stop says what the line under it says. The Tree still shows it.
+        if (steps.singleOrNull()?.let { isStop(it.entry) } == true) steps.clear()
         if (steps.isNotEmpty()) rows += MessageRow.Work(turn, workSummary(steps))
         rows += steps
         rows += closing
@@ -98,6 +100,8 @@ fun messagesOf(entries: List<Entry>, firstTurn: Int = 0): List<MessageRow> {
     endTurn()
     return rows
 }
+
+private fun isStop(entry: Entry) = (entry.body?.kind as? EntryKind.Command)?.command?.kind is CommandKind.Stop
 
 /** How many subagents an entry sits inside: each call it hangs under, other than the main line's. */
 private fun subAgentDepth(entry: Entry, byId: Map<String, Entry>): Int {

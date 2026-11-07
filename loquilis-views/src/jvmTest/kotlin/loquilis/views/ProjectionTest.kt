@@ -7,9 +7,11 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import loquilis.core.inlineContent
 import loquilis.model.AgentText
+import loquilis.model.AppCommand
 import loquilis.model.Entry
 import loquilis.model.EntryBody
 import loquilis.model.EntryState
+import loquilis.model.Interrupt
 import loquilis.model.TextRole
 import loquilis.model.Thinking
 import loquilis.model.ToolCall
@@ -93,6 +95,19 @@ class ProjectionTest {
         assertEquals("✅", outcomeMark(result("r1", "c1"), null))
         assertEquals(null, outcomeMark(running, null))
         assertEquals(null, outcomeMark(reply("a", "u"), null))
+    }
+
+    @Test
+    fun aStopAloneInItsTurnLeavesNoFold() {
+        val stop = entry("s", "u", EntryBody(app_command = AppCommand(interrupt = Interrupt())))
+        assertEquals(listOf("u"), idsOf(messagesOf(listOf(user("u", ""), stop))))
+    }
+
+    @Test
+    fun aStopAfterOtherStepsStaysInTheFold() {
+        val stop = entry("s", "c1", EntryBody(app_command = AppCommand(interrupt = Interrupt())))
+        val rows = messagesOf(listOf(user("u", ""), call("c1", "u"), stop))
+        assertEquals(listOf("u", "c1", "s"), idsOf(rows))
     }
 
     @Test
