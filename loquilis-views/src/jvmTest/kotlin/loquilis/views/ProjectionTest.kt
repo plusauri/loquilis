@@ -25,6 +25,7 @@ import loquilis.model.TurnSummary
 import loquilis.model.Usage
 import loquilis.model.UserMessage
 import loquilis.model.Visibility
+import loquilis.store.ChatStatus
 import loquilis.store.Store
 
 class ProjectionTest {
@@ -86,6 +87,17 @@ class ProjectionTest {
             MessageRow.Step(c3, result("r3", "c3"), 0, 1),
         )
         assertEquals("3 tool calls: 2 commands, 1 read, ❌ 1 failed", workSummary(steps))
+    }
+
+    @Test
+    fun workingCountsWholeSecondsAndMinutes() {
+        val since = java.time.Instant.ofEpochSecond(1000)
+        fun line(seconds: Long, waiting: Int = 0) = statusLine(ChatStatus.Working(waiting, since), since.plusSeconds(seconds))
+        assertEquals("Working… 12 s", line(12))
+        assertEquals("Working… 1 m 05 s", line(65))
+        assertEquals("Working… 3 s · 1 message waiting", line(3, 1))
+        assertEquals("Working… 3 s · 2 messages waiting", line(3, 2))
+        assertEquals("Working… 0 s", statusLine(ChatStatus.Working(0, since), since.minusSeconds(1)))
     }
 
     @Test

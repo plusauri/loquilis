@@ -33,7 +33,7 @@ sealed interface ChatStatus {
     data object Idle : ChatStatus
 
     /** The agent is on a turn, with [waiting] more messages to go when it ends. */
-    data class Working(val waiting: Int) : ChatStatus
+    data class Working(val waiting: Int, val since: Instant) : ChatStatus
 
     /** The agent could not start or stopped early. [unsent] never reached it. */
     data class Failed(val reason: String, val unsent: List<String>) : ChatStatus
@@ -138,7 +138,8 @@ class LiveChat(
             nameConversation(text)
             running.send(text)
             turnsToGo++
-            currentStatus.value = ChatStatus.Working(turnsToGo - 1)
+            val since = (currentStatus.value as? ChatStatus.Working)?.since ?: now()
+            currentStatus.value = ChatStatus.Working(turnsToGo - 1, since)
         }
     }
 
@@ -224,7 +225,7 @@ class LiveChat(
     private fun turnEnded() = synchronized(lock) {
         waitingAsks.value = emptyList()
         turnsToGo = (turnsToGo - 1).coerceAtLeast(0)
-        currentStatus.value = if (turnsToGo > 0) ChatStatus.Working(turnsToGo - 1) else ChatStatus.Idle
+        currentStatus.value = if (turnsToGo > 0) ChatStatus.Working(turnsToGo - 1, now()) else ChatStatus.Idle
     }
 
     private fun ended(end: SessionEvent.Ended) = synchronized(lock) {

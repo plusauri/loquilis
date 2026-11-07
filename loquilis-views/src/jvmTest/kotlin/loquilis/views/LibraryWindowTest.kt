@@ -23,6 +23,7 @@ import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 import loquilis.store.Agent
 import loquilis.store.ClaudeAgent
 import loquilis.store.SqliteStore
@@ -79,7 +80,7 @@ class LibraryWindowTest {
         onNodeWithText("Send").performClick()
 
         showing("Plovers are shorebirds.")
-        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Working…").fetchSemanticsNodes().isEmpty() }
+        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText("Working…", substring = true).fetchSemanticsNodes().isEmpty() }
         waitUntil(timeoutMillis = 5_000) { state.current!!.pager.conversation.title == "Tell me about plovers" }
         assertEquals(1, state.current!!.pager.turnCount)
         showing("Tell me about plovers")
@@ -228,6 +229,40 @@ class LibraryWindowTest {
         waitForIdle()
         waitUntil(timeoutMillis = 5_000) { onAllNodesWithText("Plovers are").fetchSemanticsNodes().isEmpty() }
         assertEquals(1, onAllNodesWithText("Plovers are shorebirds.").fetchSemanticsNodes().size)
+        state.close()
+    }
+
+    @Test fun aFastReplyGrowsInViewOnAShortWindow() = runDesktopComposeUiTest(900, 400) {
+        val lines = dir.resolve("deltas.jsonl")
+        lines.writeText(
+            (1..400).joinToString("\n") { n ->
+                """{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"word$n "}},"parent_tool_use_id":null}"""
+            } + "\n",
+        )
+        val state = open(
+            fake(
+                """
+                while read -r line; do
+                  while read -r delta; do printf '%s\n' "${'$'}delta"; sleep 0.004; done < "$lines"
+                  sleep 1
+                  printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"text","text":"All done."}]}}'
+                  printf '%s\n' '{"type":"result","is_error":false,"result":"All done.","num_turns":1}'
+                done
+                """.trimIndent(),
+            ),
+        )
+        onNodeWithText("New conversation").performClick()
+        waitForIdle()
+        write("Go")
+        onNodeWithText("Send").performClick()
+        val seen = linkedMapOf<Int, Boolean>()
+        waitUntil(timeoutMillis = 15_000) {
+            val writing = state.current!!.writing
+            if (writing.isNotEmpty()) seen[writing.length] = state.current!!.following
+            onAllNodesWithText("All done.").fetchSemanticsNodes().isNotEmpty()
+        }
+        assertTrue(seen.size > 5, "it grew in steps, not at once: $seen")
+        assertTrue(seen.values.all { it }, "it stayed on the newest text: $seen")
         state.close()
     }
 

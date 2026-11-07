@@ -312,6 +312,9 @@ fun turnLine(result: TurnResult): String = buildList {
 fun seconds(value: Double): String =
     if (value < 60) "%.1f s".format(value) else "%d m %02d s".format((value / 60).toInt(), (value % 60).toInt())
 
+/** A count that ticks, where tenths would only flicker. */
+fun wholeSeconds(value: Long): String = if (value < 60) "$value s" else "%d m %02d s".format(value / 60, value % 60)
+
 fun money(microUsd: Long): String = "$%.3f".format(microUsd / 1_000_000.0)
 
 fun bytes(size: Long): String = when {

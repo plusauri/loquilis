@@ -82,7 +82,7 @@ class LiveChatTest {
         )
         chat.send("Go")
         runBlocking { withTimeout(10_000) { chat.written.first { store.lastSeq(chat.conversationId) == 2L } } }
-        assertEquals(ChatStatus.Working(0), chat.status.value)
+        assertEquals(0, assertIs<ChatStatus.Working>(chat.status.value).waiting)
         chat.stop()
     }
 
@@ -91,7 +91,7 @@ class LiveChatTest {
         val chat = chat(slow)
         chat.send("One")
         chat.send("Two")
-        assertEquals(ChatStatus.Working(1), chat.status.value)
+        assertEquals(1, assertIs<ChatStatus.Working>(chat.status.value).waiting)
         chat.until { it == ChatStatus.Idle }
         assertEquals(2, kinds(chat.conversationId).count { it == "User" })
         chat.stop()

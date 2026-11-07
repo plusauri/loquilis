@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +46,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import java.time.Duration
+import java.time.Instant
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.withContext
 import loquilis.agents.PermissionAsk
@@ -54,6 +58,7 @@ import loquilis.store.ChatStatus
 
 /** How often a growing conversation is read again. */
 private const val REFRESH_MILLIS = 100L
+private const val CLOCK_MILLIS = 1000L
 
 /**
  * A library you can talk to: its conversations down the side, the one showing, and a box to write in.
@@ -225,7 +230,13 @@ private fun Composer(state: LibraryState, id: String) {
     Column(Modifier.fillMaxWidth().background(palette.panel)) {
         Box(Modifier.fillMaxWidth().background(palette.line).padding(top = 1.dp))
         asks.firstOrNull()?.let { ask -> AskCard(ask, asks.size - 1) { chat.answer(ask, it) } }
-        statusLine(status)?.let { line ->
+        val now by produceState(Instant.now(), status) {
+            while (status is ChatStatus.Working) {
+                value = Instant.now()
+                delay(CLOCK_MILLIS)
+            }
+        }
+        statusLine(status, now)?.let { line ->
             Text(
                 line,
                 color = if (status is ChatStatus.Failed) palette.failed else palette.muted,
@@ -273,12 +284,15 @@ private fun Composer(state: LibraryState, id: String) {
     }
 }
 
-private fun statusLine(status: ChatStatus): String? = when (status) {
+internal fun statusLine(status: ChatStatus, now: Instant): String? = when (status) {
     ChatStatus.Idle -> null
-    is ChatStatus.Working -> when (status.waiting) {
-        0 -> "Working…"
-        1 -> "Working… 1 message waiting"
-        else -> "Working… ${status.waiting} messages waiting"
+    is ChatStatus.Working -> {
+        val working = "Working… ${wholeSeconds(Duration.between(status.since, now).seconds.coerceAtLeast(0))}"
+        when (status.waiting) {
+            0 -> working
+            1 -> "$working · 1 message waiting"
+            else -> "$working · ${status.waiting} messages waiting"
+        }
     }
     is ChatStatus.Failed -> status.reason
 }
