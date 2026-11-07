@@ -210,7 +210,7 @@ private fun WorkFold(row: MessageRow.Work, open: Boolean, onClick: () -> Unit) {
 @Composable
 private fun StepLine(row: MessageRow.Step, selected: Boolean, onClick: () -> Unit) {
     val palette = LocalPalette.current
-    val failed = row.result?.state == EntryState.ENTRY_STATE_FAILED || row.entry.state == EntryState.ENTRY_STATE_FAILED
+    val failed = !row.denied && (row.result?.state == EntryState.ENTRY_STATE_FAILED || row.entry.state == EntryState.ENTRY_STATE_FAILED)
     Row(
         Modifier
             .fillMaxWidth()
@@ -221,7 +221,7 @@ private fun StepLine(row: MessageRow.Step, selected: Boolean, onClick: () -> Uni
             .padding(horizontal = 8.dp, vertical = 3.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        OutcomeMark(outcomeMark(row.entry, row.result))
+        OutcomeMark(outcomeMark(row.entry, row.result, row.denied))
         Text(
             kindLabel(row.entry),
             color = if (failed) palette.failed else palette.accent,

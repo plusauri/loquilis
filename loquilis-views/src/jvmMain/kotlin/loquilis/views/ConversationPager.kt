@@ -26,6 +26,8 @@ class LoadedTurn(val ordinal: Int, val entries: List<Entry>, private val texts: 
     private val resultsByCall: Map<String, Entry> =
         entries.mapNotNull { e -> e.body?.tool_result?.let { it.call_id to e } }.toMap()
 
+    private val denied: Set<String> = deniedCalls(entries)
+
     private val replies: Map<String, List<MarkdownBlock>> = messages
         .filterIsInstance<MessageRow.Reply>()
         .associate { it.entry.id to markdownBlocks(texts[it.entry.id].orEmpty()) }
@@ -37,6 +39,9 @@ class LoadedTurn(val ordinal: Int, val entries: List<Entry>, private val texts: 
     fun text(entry: Entry): String = texts[entry.id].orEmpty()
 
     fun resultOf(entry: Entry): Entry? = entry.body?.tool_call?.let { resultsByCall[it.call_id] }
+
+    /** Whether the user said no to this call, or this is the result of one they said no to. */
+    fun isDenied(entry: Entry): Boolean = (entry.body?.tool_call?.call_id ?: entry.body?.tool_result?.call_id) in denied
 }
 
 /** One part of an entry the inspector shows. */

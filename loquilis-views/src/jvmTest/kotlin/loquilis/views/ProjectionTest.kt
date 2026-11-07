@@ -8,10 +8,13 @@ import kotlin.test.assertTrue
 import loquilis.core.inlineContent
 import loquilis.model.AgentText
 import loquilis.model.AppCommand
+import loquilis.model.Decision
 import loquilis.model.Entry
 import loquilis.model.EntryBody
 import loquilis.model.EntryState
 import loquilis.model.Interrupt
+import loquilis.model.PermissionDecision
+import loquilis.model.PermissionRequest
 import loquilis.model.TextRole
 import loquilis.model.Thinking
 import loquilis.model.ToolCall
@@ -95,6 +98,23 @@ class ProjectionTest {
         assertEquals("✅", outcomeMark(result("r1", "c1"), null))
         assertEquals(null, outcomeMark(running, null))
         assertEquals(null, outcomeMark(reply("a", "u"), null))
+    }
+
+    @Test
+    fun aDeniedCallReadsAsDeniedNotFailed() {
+        val asked = entry("p", "c1", EntryBody(permission_request = PermissionRequest(request_id = "q", call_id = "cc1", description = "run")))
+        fun answer(decision: Decision) = entry("a", "p", EntryBody(app_command = AppCommand(permission_decision = PermissionDecision(request_id = "q", decision = decision))))
+        val called = call("c1", "u").let { it.copy(body = it.body?.copy(tool_call = it.body?.tool_call?.copy(call_id = "cc1"))) }
+        val refused = result("r1", "c1", EntryState.ENTRY_STATE_FAILED).let { it.copy(body = it.body?.copy(tool_result = it.body?.tool_result?.copy(call_id = "cc1"))) }
+
+        assertEquals(setOf("cc1"), deniedCalls(listOf(called, asked, answer(Decision.DECISION_DENY), refused)))
+        assertEquals(emptySet(), deniedCalls(listOf(called, asked, answer(Decision.DECISION_ALLOW_ONCE), refused)))
+
+        val step = messagesOf(listOf(user("u", ""), called, asked, answer(Decision.DECISION_DENY), refused))
+            .filterIsInstance<MessageRow.Step>().first { it.entry.id == "c1" }
+        assertTrue(step.denied)
+        assertEquals("🚫", outcomeMark(step.entry, step.result, step.denied))
+        assertEquals("1 command, 🚫 1 denied", workSummary(listOf(step)))
     }
 
     @Test

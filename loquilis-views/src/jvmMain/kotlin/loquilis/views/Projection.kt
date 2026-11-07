@@ -36,7 +36,7 @@ sealed interface MessageRow {
     }
 
     /** One thing the agent did. A tool call carries its result, so the two read as a single step. */
-    data class Step(val entry: Entry, val result: Entry?, val depth: Int, override val turn: Int) : MessageRow {
+    data class Step(val entry: Entry, val result: Entry?, val depth: Int, override val turn: Int, val denied: Boolean = false) : MessageRow {
         override val key get() = entry.id
     }
 
@@ -60,6 +60,7 @@ sealed interface MessageRow {
 fun messagesOf(entries: List<Entry>, firstTurn: Int = 0): List<MessageRow> {
     val resultsByCall = entries.mapNotNull { e -> e.body?.tool_result?.let { it.call_id to e } }.toMap()
     val calledIds = entries.mapNotNull { it.body?.tool_call?.call_id }.toSet()
+    val denied = deniedCalls(entries)
     val byId = entries.associateBy { it.id }
     val rows = mutableListOf<MessageRow>()
 
@@ -89,7 +90,7 @@ fun messagesOf(entries: List<Entry>, firstTurn: Int = 0): List<MessageRow> {
             is EntryKind.Text ->
                 if (kind.text.role == TextRole.TEXT_ROLE_REPLY && depth == 0) closing += MessageRow.Reply(entry, turn)
                 else steps += MessageRow.Step(entry, null, depth, turn)
-            is EntryKind.Call -> steps += MessageRow.Step(entry, resultsByCall[kind.call.call_id], depth, turn)
+            is EntryKind.Call -> steps += MessageRow.Step(entry, resultsByCall[kind.call.call_id], depth, turn, kind.call.call_id in denied)
             is EntryKind.Result ->
                 if (kind.result.call_id !in calledIds) steps += MessageRow.Step(entry, null, depth, turn)
             is EntryKind.TurnEnd -> closing += MessageRow.Footer(entry, kind.result, turn)
@@ -99,6 +100,15 @@ fun messagesOf(entries: List<Entry>, firstTurn: Int = 0): List<MessageRow> {
     }
     endTurn()
     return rows
+}
+
+/** The calls the user said no to, which the agent reports as failures though nothing went wrong. */
+fun deniedCalls(entries: List<Entry>): Set<String> {
+    val callOfRequest = entries.mapNotNull { e -> e.body?.permission_request?.let { it.request_id to it.call_id } }.toMap()
+    return entries.mapNotNull { e ->
+        val decision = ((e.body?.kind as? EntryKind.Command)?.command?.kind as? CommandKind.Decide)?.decision
+        decision?.takeIf { it.decision == Decision.DECISION_DENY }?.let { callOfRequest[it.request_id] }
+    }.toSet()
 }
 
 private fun isStop(entry: Entry) = (entry.body?.kind as? EntryKind.Command)?.command?.kind is CommandKind.Stop
@@ -112,14 +122,16 @@ private fun subAgentDepth(entry: Entry, byId: Map<String, Entry>): Int {
 }
 
 private const val FAILED_MARK = "❌"
+private const val DENIED_MARK = "🚫"
 private const val STOPPED_MARK = "⏹️"
 private const val DONE_MARK = "✅"
 
 /** How a step came out, readable without telling red from blue. Null while it runs and where nothing was at stake. */
-fun outcomeMark(entry: Entry, result: Entry?): String? {
+fun outcomeMark(entry: Entry, result: Entry?, denied: Boolean = false): String? {
     val settled = result ?: entry.takeIf { it.body?.tool_result != null }
     val states = listOfNotNull(entry.state, settled?.state)
     return when {
+        denied -> DENIED_MARK
         EntryState.ENTRY_STATE_FAILED in states -> FAILED_MARK
         EntryState.ENTRY_STATE_INTERRUPTED in states -> STOPPED_MARK
         settled?.state == EntryState.ENTRY_STATE_COMPLETE -> DONE_MARK
@@ -127,15 +139,19 @@ fun outcomeMark(entry: Entry, result: Entry?): String? {
     }
 }
 
-/** What the fold says while closed: "6 tool calls: 4 commands, 2 reads, ❌ 1 failed", or "8 commands". */
+/** What the fold says while closed: "6 tool calls: 4 commands, 2 reads, ❌ 1 failed, 🚫 1 denied", or "8 commands". */
 fun workSummary(steps: List<MessageRow.Step>): String {
     val calls = steps.mapNotNull { it.entry.body?.tool_call }
     if (calls.isEmpty()) return plural(steps.size, "step", "steps")
     val byKind = calls.groupingBy { it.kind }.eachCount().entries
         .sortedWith(compareByDescending<Map.Entry<ToolKind, Int>> { it.value }.thenBy { it.key.ordinal })
         .map { (kind, count) -> nounOf(kind).let { (one, many) -> plural(count, one, many) } }
-    val failed = steps.count { it.result?.state == EntryState.ENTRY_STATE_FAILED }
-    val parts = byKind + listOfNotNull(if (failed > 0) "$FAILED_MARK $failed failed" else null)
+    val denied = steps.count { it.denied }
+    val failed = steps.count { !it.denied && it.result?.state == EntryState.ENTRY_STATE_FAILED }
+    val parts = byKind + listOfNotNull(
+        "$FAILED_MARK $failed failed".takeIf { failed > 0 },
+        "$DENIED_MARK $denied denied".takeIf { denied > 0 },
+    )
     return if (byKind.size == 1) parts.joinToString(", ")
     else "${plural(calls.size, "tool call", "tool calls")}: ${parts.joinToString(", ")}"
 }

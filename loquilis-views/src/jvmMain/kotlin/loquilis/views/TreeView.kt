@@ -76,13 +76,14 @@ fun TreeView(state: ConversationState, list: LazyListState) {
                         itemsIndexed(state.treeRows(turn), key = { _, row -> row.entry.id }) { index, row ->
                             val id = row.entry.id
                             val folds = index == 0 || id in turn.treeParents
+                            val denied = turn.isDenied(row.entry)
                             TreeLine(
                                 depth = row.depth,
                                 label = kindLabel(row.entry),
                                 text = headline(row.entry),
                                 emphasized = row.entry.body?.user_message != null,
-                                failed = row.entry.state == EntryState.ENTRY_STATE_FAILED,
-                                mark = outcomeMark(row.entry, turn.resultOf(row.entry)),
+                                failed = !denied && row.entry.state == EntryState.ENTRY_STATE_FAILED,
+                                mark = outcomeMark(row.entry, turn.resultOf(row.entry), denied),
                                 tag = tag(row.entry),
                                 fold = when {
                                     !folds -> TreeFold.None
