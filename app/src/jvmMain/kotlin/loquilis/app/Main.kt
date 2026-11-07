@@ -1,5 +1,6 @@
 package loquilis.app
 
+import loquilis.views.Brand
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
@@ -39,13 +40,15 @@ fun main(args: Array<String>) {
         },
     )
     application {
+        val mark = remember { BitmapPainter(icon.toComposeImageBitmap()) }
+        val brand = remember { Brand("Loquilis", mark, AppVersion.about()) }
         Window(
             onCloseRequest = ::exitApplication,
             title = "Loquilis",
-            icon = remember { BitmapPainter(icon.toComposeImageBitmap()) },
+            icon = mark,
             state = rememberWindowState(width = 1320.dp, height = 880.dp),
         ) {
-            ReviewTheme { LibraryWindow(state) { agent -> chooseFolder()?.let { state.newConversation(it, agent) } } }
+            ReviewTheme { LibraryWindow(state, brand) { agent -> chooseFolder()?.let { state.newConversation(it, agent) } } }
         }
     }
 }
@@ -59,7 +62,7 @@ private fun chooseFolder(): Path? {
     return dialog.file?.let { Path.of(dialog.directory, it) }
 }
 
-/** The Plusauri mark, until Loquilis has its own. */
+/** The shield. Its source is `app/loquilis-shield.svg`. */
 private fun readAppIcon(): BufferedImage =
     checkNotNull(ClassLoader.getSystemResourceAsStream("app-icon.png")) { "app-icon.png is missing" }
         .use(ImageIO::read)

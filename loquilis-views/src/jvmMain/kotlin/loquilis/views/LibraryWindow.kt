@@ -1,5 +1,16 @@
 package loquilis.views
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.TooltipArea
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -62,13 +73,80 @@ private const val CLOCK_MILLIS = 1000L
 
 /**
  * A library you can talk to: its conversations down the side, the one showing, and a box to write in.
- * [onNewConversation] asks the host where the agent should work.
+ * [onNewConversation] asks the host where the agent should work. [brand] names the console at the top of
+ * the list, and [keys] says which keys ask for which actions.
  */
 @Composable
-fun LibraryWindow(state: LibraryState, onNewConversation: (agent: String) -> Unit) {
+fun LibraryWindow(
+    state: LibraryState,
+    brand: Brand? = null,
+    keys: KeyBindings = DefaultKeys,
+    onNewConversation: (agent: String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    val keyFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { keyFocus.requestFocus() }
+    Box(
+        Modifier.fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                val action = keys.actionFor(event)
+                when {
+                    state.deleting != null && event.key == Key.Escape -> true.also { state.deleting = null }
+                    state.deleting != null && event.key == Key.Enter -> true.also { scope.launch { state.confirmDelete() } }
+                    action != null -> true.also { state.perform(action) }
+                    else -> false
+                }
+            }
+            .focusRequester(keyFocus)
+            .focusable(),
+    ) {
+        Library(state, brand, onNewConversation)
+        state.deleting?.let { conversation ->
+            ConfirmDelete(conversation, onCancel = { state.deleting = null }) { scope.launch { state.confirmDelete() } }
+        }
+    }
+}
+
+/** Says what will go and what will stay, because this one cannot be taken back. */
+@Composable
+private fun ConfirmDelete(conversation: Conversation, onCancel: () -> Unit, onDelete: () -> Unit) {
+    val palette = LocalPalette.current
+    Box(
+        Modifier.fillMaxSize()
+            .background(palette.ink.copy(alpha = 0.25f))
+            .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onCancel),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.width(380.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(palette.page)
+                .clickable(remember { MutableInteractionSource() }, indication = null) {}
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("Delete “${conversation.shownTitle}”?", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "This removes the conversation and everything recorded for it from this library. It cannot be undone. " +
+                    "The agent's own session history stays where the agent keeps it.",
+                color = palette.muted,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                ComposerButton("Cancel", palette.line, palette.ink, onClick = onCancel)
+                ComposerButton("Delete", palette.line, palette.failed, onClick = onDelete)
+            }
+        }
+    }
+}
+
+@Composable
+private fun Library(state: LibraryState, brand: Brand?, onNewConversation: (agent: String) -> Unit) {
     val palette = LocalPalette.current
     Row(Modifier.fillMaxSize().background(palette.page)) {
-        ConversationList(state, onNewConversation, Modifier.width(260.dp).fillMaxHeight().background(palette.panel))
+        ConversationList(state, brand, onNewConversation, Modifier.width(260.dp).fillMaxHeight().background(palette.panel))
         Box(Modifier.width(1.dp).fillMaxHeight().background(palette.line))
         val showing = state.current
         val id = state.currentId
@@ -90,7 +168,9 @@ private fun Follow(state: LibraryState, showing: ConversationState, id: String) 
     LaunchedEffect(id) {
         state.chat(id).written.sample(REFRESH_MILLIS).collect {
             val writing = state.chat(id).writing.value
-            showing.show(withContext(Dispatchers.IO) { showing.pager.refreshed() })
+            // A conversation deleted just now can no longer be read, and what replaced it is already showing.
+            val refreshed = withContext(Dispatchers.IO) { runCatching { showing.pager.refreshed() }.getOrNull() }
+            showing.show(refreshed ?: return@collect)
             // Set with the entries read after it, so a finished reply never leaves the screen for a moment.
             showing.writing = writing
             state.refreshList()
@@ -99,9 +179,10 @@ private fun Follow(state: LibraryState, showing: ConversationState, id: String) 
 }
 
 @Composable
-private fun ConversationList(state: LibraryState, onNewConversation: (agent: String) -> Unit, modifier: Modifier) {
+private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversation: (agent: String) -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
     Column(modifier) {
+        brand?.let { BrandLine(it) }
         for (agent in state.agentNames) Text(
             if (state.agentNames.size == 1) NEW_CONVERSATION else "New ${agentLabel(agent)} conversation",
             color = palette.accent,
@@ -114,10 +195,58 @@ private fun ConversationList(state: LibraryState, onNewConversation: (agent: Str
             LazyColumn(Modifier.fillMaxSize(), state = list) {
                 items(state.conversations, key = { it.id }) { conversation ->
                     val asks by state.chat(conversation.id).asks.collectAsState()
-                    ConversationLine(conversation, conversation.id == state.currentId, asks.isNotEmpty()) { state.select(conversation.id) }
+                    val showing = conversation.id == state.currentId
+                    Box {
+                        ConversationLine(conversation, showing, asks.isNotEmpty()) { state.select(conversation.id) }
+                        if (showing) {
+                            Text(
+                                "Delete",
+                                color = palette.muted,
+                                fontSize = 11.sp,
+                                modifier = Modifier.align(Alignment.BottomEnd)
+                                    .clickable { state.perform(ConsoleAction.DeleteConversation) }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
                 }
             }
             VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
+        }
+    }
+}
+
+/** The console's mark and name. Hovering over them says which build this is. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BrandLine(brand: Brand) {
+    val palette = LocalPalette.current
+    TooltipArea(
+        tooltip = {
+            Column(
+                Modifier.clip(RoundedCornerShape(8.dp))
+                    .background(palette.page)
+                    .border(1.dp, palette.line, RoundedCornerShape(8.dp))
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                for ((label, value) in brand.about) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(label, color = palette.muted, fontSize = 12.sp, modifier = Modifier.width(84.dp))
+                        Text(value, color = palette.ink, fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        delayMillis = 250,
+    ) {
+        Row(
+            Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Image(brand.mark, contentDescription = null, Modifier.size(24.dp))
+            Text(brand.name, color = palette.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }

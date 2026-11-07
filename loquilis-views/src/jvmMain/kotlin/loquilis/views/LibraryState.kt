@@ -1,5 +1,7 @@
 package loquilis.views
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +37,9 @@ class LibraryState(
 
     private val chats = HashMap<String, LiveChat>()
 
+    /** The conversation waiting on the user to confirm its deletion. */
+    var deleting by mutableStateOf<Conversation?>(null)
+
     /** What is typed and not sent, by conversation. */
     val drafts = mutableStateMapOf<String, String>()
 
@@ -58,6 +63,31 @@ class LibraryState(
         val conversation = store.newConversation(workspace, now(), cli = agent)
         refreshList()
         select(conversation.id)
+    }
+
+    /** Does what [action] names. Whatever asks, a key or a button, comes through here. */
+    fun perform(action: ConsoleAction) {
+        when (action) {
+            ConsoleAction.DeleteConversation -> deleting = conversations.firstOrNull { it.id == currentId }
+        }
+    }
+
+    /** Ends the agent and removes the conversation from this library. What the agent keeps itself stays. */
+    suspend fun confirmDelete() {
+        val conversation = deleting ?: return
+        val id = conversation.id
+        deleting = null
+        conversations = conversations.filter { it.id != id }
+        drafts.remove(id)
+        if (currentId == id) {
+            val next = conversations.firstOrNull()
+            if (next == null) current = null else select(next.id)
+        }
+        withContext(Dispatchers.IO) {
+            synchronized(chats) { chats.remove(id) }?.stop()
+            store.deleteConversation(id)
+        }
+        refreshList()
     }
 
     /** Sends [text] on the conversation showing, and keeps the view on the answer. */

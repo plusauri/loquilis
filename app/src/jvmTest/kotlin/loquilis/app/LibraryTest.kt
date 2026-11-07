@@ -96,3 +96,13 @@ class LibraryTest {
         assertEquals(before, scratches())
     }
 }
+
+class AppVersionTest {
+    @kotlin.test.Test
+    fun theCardSaysWhichBuildThisIs() {
+        val about = AppVersion.about().toMap()
+        kotlin.test.assertEquals(AppVersion.TEXT, about["Version"])
+        kotlin.test.assertEquals(AppVersion.LAST_CHANGE, about["Last change"])
+        kotlin.test.assertTrue(about["Commit"].orEmpty().isNotEmpty(), "the build writes down its commit")
+    }
+}

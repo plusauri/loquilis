@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-64 -8 1024 1024" width="1024" height="1024">
+  <title>Loquilis shield</title>
+  <defs>
+    <path id="shield" d="M455 88 L808 195 V620 C808 790 640 860 455 968 C270 860 102 790 102 620 V195 Z"/>
+    <rect id="upper" x="370" y="240" width="345" height="195" rx="97.5"/>
+    <rect id="lower" x="192" y="517" width="353" height="203" rx="101.5"/>
+    <clipPath id="left"><rect x="-64" y="-8" width="519" height="1024"/></clipPath>
+    <clipPath id="right"><rect x="455" y="-8" width="505" height="1024"/></clipPath>
+  </defs>
+  <use href="#shield" fill="#123E2B" clip-path="url(#left)"/>
+  <use href="#shield" fill="#4A9D85" clip-path="url(#right)"/>
+  <g clip-path="url(#left)"><use href="#upper" fill="none" stroke="#4A9D85" stroke-width="60"/></g>
+  <use href="#upper" fill="#123E2B"/>
+  <path d="M570 432 L648 488 V410 Z" fill="#123E2B"/>
+  <g clip-path="url(#right)"><use href="#lower" fill="none" stroke="#123E2B" stroke-width="50"/></g>
+  <use href="#lower" fill="#4A9D85"/>
+  <path d="M262 690 V772 L345 716 Z" fill="#4A9D85"/>
+</svg>

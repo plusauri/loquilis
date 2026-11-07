@@ -25,6 +25,9 @@ interface Store : BlobSink, AutoCloseable {
     fun conversation(id: String): Conversation?
     fun conversations(limit: Int, offset: Int = 0): List<Conversation>
 
+    /** Removes a conversation and all that was recorded for it, and any blob nothing else uses. It cannot be undone. */
+    fun deleteConversation(id: String)
+
     fun putBranch(branch: Branch)
     fun branches(conversationId: String): List<Branch>
 

@@ -399,6 +399,25 @@ class SqliteStore private constructor(
         }
     }
 
+    override fun deleteConversation(id: String) {
+        val orphanFiles = transaction {
+            val used = buildSet { forEachEntry(id) { entry -> blobsOf(entry).forEach { add(it.sha256) } } }
+            write("DELETE FROM entry_fts WHERE rowid IN (SELECT row FROM entry WHERE conversation_id = ?)", id)
+            for (table in listOf("entry", "turn", "branch", "raw_event")) write("DELETE FROM $table WHERE conversation_id = ?", id)
+            write("DELETE FROM conversation WHERE id = ?", id)
+            used.filterNot(::referenced).mapNotNull { sha256 ->
+                val file = writerQuery("SELECT file FROM blob WHERE sha256 = ?", sha256) { it.one { row -> row.getString("file") } }
+                write("DELETE FROM blob WHERE sha256 = ?", sha256)
+                file
+            }
+        }
+        orphanFiles.forEach { Files.deleteIfExists(blobDir.resolve(it)) }
+    }
+
+    /** Looks through stored bodies for the hash, which they hold as plain text, without decoding one. */
+    private fun referenced(sha256: String): Boolean =
+        writerQuery("SELECT 1 FROM entry WHERE instr(body, CAST(? AS BLOB)) > 0 LIMIT 1", sha256) { it.next() }
+
     // Blobs
 
     override fun put(bytes: ByteString, mediaType: String): BlobRef {

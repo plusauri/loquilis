@@ -4,6 +4,27 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// What the version card says about where this build came from.
+val buildInfo by tasks.registering {
+    val git = { args: List<String> -> providers.exec { commandLine(listOf("git") + args); isIgnoreExitValue = true }.standardOutput.asText.map(String::trim) }
+    val commit = git(listOf("rev-parse", "--short", "HEAD"))
+    val committed = git(listOf("log", "-1", "--format=%cd", "--date=format:%Y-%m-%d %H:%M"))
+    val branch = git(listOf("branch", "--show-current"))
+    val changes = git(listOf("status", "--porcelain"))
+    val folder = layout.buildDirectory.dir("build-info")
+    inputs.property("commit", commit)
+    inputs.property("committed", committed)
+    inputs.property("branch", branch)
+    inputs.property("changed", changes.map(String::isNotEmpty))
+    outputs.dir(folder)
+    doLast {
+        val shown = commit.get() + if (changes.get().isNotEmpty()) " with changes" else ""
+        folder.get().file("build-info.properties").asFile.writeText(
+            "commit=$shown\ncommitted=${committed.get()}\nbranch=${branch.get()}\n",
+        )
+    }
+}
+
 kotlin {
     jvm()
 
@@ -13,6 +34,7 @@ kotlin {
         jvmMain {
             // The window opens the same recorded take the parser is tested on, with no second copy.
             resources.srcDir("../loquilis-agents/src/jvmTest/resources")
+            resources.srcDir(buildInfo)
 
             dependencies {
                 implementation(project(":loquilis-views"))

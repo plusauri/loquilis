@@ -15,6 +15,10 @@ Loquilis is a desktop console and a Kotlin Multiplatform library (`loquilis`) fo
 - Decisions: `doc/decisions/`, numbered, one per file.
 - Bespoke consoles are the point of the library: collapsible panels, theming, avatars and client-configurable keys are coming. New UI work follows `doc/decisions/0002-bespoke-consoles.md`.
 
+## Version
+
+`app/src/jvmMain/kotlin/loquilis/app/AppVersion.kt` is the one place the version is written. Raise `PATCH` and rewrite `LAST_CHANGE` with every change that reaches the window, however small, so a person can tell which code they are looking at. The card appears on hover over the name at the top of the conversation list.
+
 ## Commands
 
 Run from the repo root.

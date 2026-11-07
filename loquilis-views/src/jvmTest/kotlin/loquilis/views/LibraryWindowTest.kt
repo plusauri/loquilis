@@ -12,6 +12,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.pressKey
@@ -263,6 +264,66 @@ class LibraryWindowTest {
         }
         assertTrue(seen.size > 5, "it grew in steps, not at once: $seen")
         assertTrue(seen.values.all { it }, "it stayed on the newest text: $seen")
+        state.close()
+    }
+
+    @Test fun deletingAsksFirstAndThenMovesToAnotherConversation() = runDesktopComposeUiTest(1100, 700) {
+        val state = open(answers)
+        onNodeWithText("New conversation").performClick()
+        waitForIdle()
+        val first = state.currentId!!
+        onAllNodesWithText("New conversation")[0].performClick()
+        waitForIdle()
+        val second = state.currentId!!
+
+        onNodeWithText("Delete").performClick()
+        showing("Delete “New conversation”?")
+        shot("delete-asks")
+        onNodeWithText("Cancel").performClick()
+        waitForIdle()
+        assertEquals(2, state.conversations.size)
+        assertNull(state.deleting)
+
+        onNodeWithText("Delete").performClick()
+        waitForIdle()
+        onAllNodesWithText("Delete")[1].performClick()
+        waitUntil(timeoutMillis = 5_000) { store.conversation(second) == null }
+        waitForIdle()
+        assertEquals(listOf(first), state.conversations.map { it.id })
+        assertEquals(first, state.currentId)
+        state.close()
+    }
+
+    @Test fun theLastConversationCanGoToo() = runDesktopComposeUiTest(1100, 700) {
+        val state = open(answers)
+        onNodeWithText("New conversation").performClick()
+        waitForIdle()
+        state.perform(ConsoleAction.DeleteConversation)
+        waitForIdle()
+        onAllNodesWithText("Delete")[1].performClick()
+        showing("Start a conversation to talk to an agent.")
+        assertNull(state.currentId)
+        state.close()
+    }
+
+    @Test fun aKeyAsksForTheActionItIsBoundTo() = runDesktopComposeUiTest(1100, 700) {
+        val state = open(answers)
+        onNodeWithText("New conversation").performClick()
+        waitForIdle()
+        onNodeWithText("Message").performClick()
+        waitForIdle()
+        onRoot().performKeyInput {
+            keyDown(Key.MetaLeft)
+            keyDown(Key.ShiftLeft)
+            pressKey(Key.Backspace)
+            keyUp(Key.ShiftLeft)
+            keyUp(Key.MetaLeft)
+        }
+        waitForIdle()
+        assertEquals(state.currentId, state.deleting?.id)
+        onRoot().performKeyInput { pressKey(Key.Escape) }
+        waitForIdle()
+        assertNull(state.deleting)
         state.close()
     }
 

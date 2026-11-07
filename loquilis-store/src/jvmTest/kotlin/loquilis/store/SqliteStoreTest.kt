@@ -14,6 +14,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import loquilis.core.ContentFactory
+import loquilis.core.blobRefOf
 import loquilis.core.inlineContent
 import loquilis.model.AgentBinding
 import loquilis.model.AgentText
@@ -238,6 +239,51 @@ class SqliteStoreTest {
             store.appendEntry(Entry(id = "e1", conversation_id = CONVERSATION, seq = 1, body = body))
             val snippet = store.search("needleword").single().snippet
             assertTrue("needleword" in snippet, snippet)
+        }
+    }
+
+    @Test
+    fun deletingAConversationLeavesNothingOfIt() {
+        recorded(path).use { store ->
+            val hit = store.search("retirement").first()
+            assertEquals(CONVERSATION, hit.conversation_id)
+            store.deleteConversation(CONVERSATION)
+            assertNull(store.conversation(CONVERSATION))
+            assertTrue(store.allEntries().isEmpty())
+            assertEquals(0, store.rawCount(CONVERSATION))
+            assertEquals(0, store.turnCount(CONVERSATION, MAIN))
+            assertTrue(store.branches(CONVERSATION).isEmpty())
+            assertTrue(store.search("retirement").isEmpty())
+        }
+    }
+
+    @Test
+    fun aDeletedConversationsBlobsGoUnlessAnotherUsesThem() {
+        SqliteStore.open(path, fileBlobBytes = 16).use { store ->
+            val contents = ContentFactory(store, inlineLimitBytes = 8)
+            fun add(conversation: String, text: String) {
+                store.putConversation(conversation().copy(id = conversation))
+                val body = EntryBody(agent_text = AgentText(contents.text(text)))
+                store.appendEntry(Entry(id = "$conversation-1", conversation_id = conversation, seq = 1, at = AT, author = Author.AUTHOR_AGENT, state = EntryState.ENTRY_STATE_COMPLETE, body = body))
+            }
+            val shared = "the text both conversations hold ".repeat(20)
+            val alone = "the text only the first one holds ".repeat(20)
+            add("a", shared)
+            store.appendEntry(
+                Entry(id = "a-2", conversation_id = "a", seq = 2, at = AT, author = Author.AUTHOR_AGENT, state = EntryState.ENTRY_STATE_COMPLETE, body = EntryBody(agent_text = AgentText(contents.text(alone)))),
+            )
+            add("b", shared)
+            val files = { Files.walk(path.resolveSibling("library.sqlite.blobs")).use { walk -> walk.filter(Files::isRegularFile).count() } }
+            assertEquals(2, files())
+            val sharedSha = blobRefOf(shared.encodeUtf8(), "text/plain").sha256
+            val aloneSha = blobRefOf(alone.encodeUtf8(), "text/plain").sha256
+
+            store.deleteConversation("a")
+
+            assertNotNull(store.blob(sharedSha))
+            assertNull(store.blob(aloneSha))
+            assertEquals(1, files())
+            assertEquals(shared, store.text(store.entry("b-1")?.body?.agent_text?.text))
         }
     }
 
