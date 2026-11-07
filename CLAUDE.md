@@ -13,6 +13,7 @@ Loquilis is a desktop console and a Kotlin Multiplatform library (`loquilis`) fo
 
 - Conversation model and storage: `doc/design/conversation-model.md`.
 - Decisions: `doc/decisions/`, numbered, one per file.
+- Open models and showing where data goes are a core aim, not an add-on: `doc/decisions/0003-open-models-and-where-data-goes.md`.
 - Bespoke consoles are the point of the library: collapsible panels, theming, avatars and client-configurable keys are coming. New UI work follows `doc/decisions/0002-bespoke-consoles.md`.
 
 ## Version
