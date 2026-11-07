@@ -196,18 +196,8 @@ private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversati
                 items(state.conversations, key = { it.id }) { conversation ->
                     val asks by state.chat(conversation.id).asks.collectAsState()
                     val showing = conversation.id == state.currentId
-                    Box {
-                        ConversationLine(conversation, showing, asks.isNotEmpty()) { state.select(conversation.id) }
-                        if (showing) {
-                            Text(
-                                "Delete",
-                                color = palette.muted,
-                                fontSize = 11.sp,
-                                modifier = Modifier.align(Alignment.BottomEnd)
-                                    .clickable { state.perform(ConsoleAction.DeleteConversation) }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                            )
-                        }
+                    ConversationLine(conversation, showing, asks.isNotEmpty(), { state.perform(ConsoleAction.DeleteConversation) }) {
+                        state.select(conversation.id)
                     }
                 }
             }
@@ -252,22 +242,32 @@ private fun BrandLine(brand: Brand) {
 }
 
 @Composable
-private fun ConversationLine(conversation: Conversation, selected: Boolean, asking: Boolean, onClick: () -> Unit) {
+private fun ConversationLine(conversation: Conversation, selected: Boolean, asking: Boolean, onDelete: () -> Unit, onClick: () -> Unit) {
     val palette = LocalPalette.current
-    Column(
+    Row(
         Modifier.fillMaxWidth()
             .background(if (selected) palette.selection else palette.panel)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(conversation.shownTitle, color = palette.ink, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(
-            if (asking) "Waiting for your answer" else place(conversation),
-            color = if (asking) palette.accent else palette.muted,
-            fontSize = 11.sp,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(Modifier.weight(1f).padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)) {
+            Text(conversation.shownTitle, color = palette.ink, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                if (asking) "Waiting for your answer" else place(conversation),
+                color = if (asking) palette.accent else palette.muted,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (selected) {
+            Text(
+                "Delete",
+                color = palette.muted,
+                fontSize = 11.sp,
+                modifier = Modifier.clickable(onClick = onDelete).padding(start = 6.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+            )
+        }
     }
 }
 

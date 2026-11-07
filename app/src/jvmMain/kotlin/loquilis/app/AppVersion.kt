@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 1
-    const val LAST_CHANGE = "Shield icon, version card, delete"
+    private const val PATCH = 2
+    const val LAST_CHANGE = "Delete sits beside the conversation name"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 
