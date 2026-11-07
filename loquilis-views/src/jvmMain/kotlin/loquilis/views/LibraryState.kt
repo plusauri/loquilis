@@ -30,6 +30,9 @@ class LibraryState(
     /** The agents a new conversation can start with, by their command-line tool's name. */
     val agentNames: List<String> get() = agents.keys.toList()
 
+    /** Whether a new conversation with [agent] needs a folder to work on. */
+    fun needsFolder(agent: String): Boolean = agents[agent]?.needsFolder ?: true
+
     var conversations by mutableStateOf(store.conversations(LISTED))
         private set
     var current by mutableStateOf(first?.let { ConversationState(store, it) })

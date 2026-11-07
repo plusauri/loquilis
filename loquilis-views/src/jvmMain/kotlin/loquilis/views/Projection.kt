@@ -303,7 +303,7 @@ fun turnEndLine(entry: Entry, result: TurnResult): String {
 fun turnLine(result: TurnResult): String = buildList {
     result.duration?.let { add(seconds(it.getSeconds() + it.getNano() / 1e9)) }
     result.usage?.let { usage ->
-        add(money(usage.cost_micro_usd))
+        if (usage.cost_micro_usd > 0) add(money(usage.cost_micro_usd))
         add("${"%,d".format(usage.output_tokens)} tokens out")
     }
     if (result.agent_turns > 0) add(plural(result.agent_turns, "round trip", "round trips"))

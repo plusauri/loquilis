@@ -2,7 +2,7 @@
 
 ## Status
 
-Direction and refinements accepted 2026-11-07 (Dan). Nothing is built. Claims about other products are checked again before they are built on.
+Direction and refinements accepted 2026-11-07 (Dan). Plain chat is built, as `LocalChatAgent`, `HttpChatSession` and `OpenAiChatParser`, and has only run against a stand-in server. The rest is not built. Claims about other products are checked again before they are built on.
 
 ## The goal, as Dan put it
 

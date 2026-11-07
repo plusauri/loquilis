@@ -1,5 +1,6 @@
 package loquilis.app
 
+import loquilis.store.LocalChatAgent
 import loquilis.views.Brand
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.painter.BitmapPainter
@@ -31,7 +32,7 @@ fun main(args: Array<String>) {
     val icon = readAppIcon()
     showInDock(icon)
     val library = openArgument(args.firstOrNull())
-    val state = LibraryState(library.store, mapOf("claude" to ClaudeAgent(), "grok" to GrokAgent()), library.conversationId)
+    val state = LibraryState(library.store, mapOf("claude" to ClaudeAgent(), "grok" to GrokAgent(), "local" to LocalChatAgent(library.store)), library.conversationId)
     // A hook, not a finally: application() ends the process itself when the window closes.
     Runtime.getRuntime().addShutdownHook(
         Thread {
@@ -48,7 +49,10 @@ fun main(args: Array<String>) {
             icon = mark,
             state = rememberWindowState(width = 1320.dp, height = 880.dp),
         ) {
-            ReviewTheme { LibraryWindow(state, brand) { agent -> chooseFolder()?.let { state.newConversation(it, agent) } } }
+            ReviewTheme { LibraryWindow(state, brand) { agent ->
+                    val folder = if (state.needsFolder(agent)) chooseFolder() else Path.of("")
+                    folder?.let { state.newConversation(it, agent) }
+                } }
         }
     }
 }

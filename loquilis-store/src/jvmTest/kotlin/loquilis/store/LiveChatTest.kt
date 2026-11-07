@@ -1,6 +1,9 @@
 package loquilis.store
 
+import com.sun.net.httpserver.HttpServer
+import java.net.InetSocketAddress
 import java.nio.file.Path
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.io.path.readLines
 import kotlin.io.path.readText
 import kotlin.io.path.writeText
@@ -176,6 +179,37 @@ class LiveChatTest {
         done
         """.trimIndent(),
     )
+
+    @Test
+    fun aLocalChatCarriesOnFromTheLibraryAfterARestart() {
+        val seen = CopyOnWriteArrayList<String>()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply { start() }
+        server.createContext("/v1/chat/completions") { exchange ->
+            seen += exchange.requestBody.readBytes().decodeToString()
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { out ->
+                val reply = """{"choices":[{"delta":{"content":"Answer ${seen.size}"}}]}"""
+                out.write("data: $reply\n\ndata: [DONE]\n\n".toByteArray())
+            }
+        }
+        val agent = LocalChatAgent(store, "http://127.0.0.1:${server.address.port}")
+        val conversation = store.newConversation(Path.of(""), java.time.Instant.now(), cli = "local", model = "m")
+        fun exchange(text: String) {
+            val chat = LiveChat(store, conversation.id, agent)
+            chat.send(text)
+            chat.until { it is ChatStatus.Idle }
+            chat.stop()
+        }
+
+        exchange("First question")
+        exchange("Second question")
+        server.stop(0)
+
+        val second = seen[1]
+        assertTrue("First question" in second && "Answer 1" in second && "Second question" in second, second)
+        assertEquals(2, store.turnCount(conversation.id, conversation.main_branch_id))
+        assertEquals("", store.conversation(conversation.id)?.workspace_path)
+    }
 
     private fun LiveChat.awaitAsk() = runBlocking { withTimeout(10_000) { asks.first { it.isNotEmpty() } } }.single()
 

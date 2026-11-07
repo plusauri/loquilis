@@ -1,5 +1,9 @@
 package loquilis.store
 
+import loquilis.agents.ChatMessage
+import loquilis.agents.HttpChatSession
+import loquilis.agents.OpenAiChatParser
+import loquilis.model.TextRole
 import com.squareup.wire.Instant
 import java.io.File
 import java.nio.file.Path
@@ -45,6 +49,9 @@ interface Agent {
 
     /** Starts the agent. [firstRawSeq] follows the raw lines the conversation already has. */
     fun start(conversation: Conversation, parser: AgentParser, firstRawSeq: Long): AgentSession
+
+    /** Whether this one works on a folder of files, which the host then has to ask for. */
+    val needsFolder: Boolean get() = true
 }
 
 /** `claude`, in its one-process-per-conversation form. A conversation carries on through `--resume`. */
@@ -78,6 +85,40 @@ class GrokAgent(private val command: List<String> = listOf("grok")) : Agent {
             firstRawSeq = firstRawSeq,
             command = command,
         )
+}
+
+/**
+ * Plain chat with a model on a runner at [baseUrl], such as Ollama, with no agent and so no tools. Ollama
+ * listens on this address by default. A runner keeps no conversation, so each one comes from [store].
+ */
+class LocalChatAgent(private val store: Store, private val baseUrl: String = "http://localhost:11434") : Agent {
+    override val needsFolder = false
+
+    override fun parser(conversationId: String, blobs: BlobSink, newId: () -> String): AgentParser =
+        OpenAiChatParser(conversationId, ContentFactory(blobs), newId)
+
+    override fun start(conversation: Conversation, parser: AgentParser, firstRawSeq: Long): AgentSession =
+        HttpChatSession(
+            parser,
+            baseUrl,
+            model = listOfNotNull(conversation.agent?.reported_model, conversation.agent?.model).firstOrNull(String::isNotEmpty),
+            workspace = conversation.workspace_path,
+            history = historyOf(conversation.id),
+            firstRawSeq = firstRawSeq,
+        )
+
+    private fun historyOf(conversationId: String): List<ChatMessage> = buildList {
+        store.forEachEntry(conversationId) { entry ->
+            val body = entry.body
+            body?.user_message?.let { add(ChatMessage("user", store.text(it.text))) }
+            body?.agent_text?.takeIf { it.role == TextRole.TEXT_ROLE_REPLY }?.let { add(ChatMessage("assistant", store.text(it.text))) }
+        }
+    }.takeLast(RESENT_MESSAGES)
+
+    private companion object {
+        /** Enough to hold a conversation together, without outgrowing what a small model can read. */
+        const val RESENT_MESSAGES = 40
+    }
 }
 
 /** Adds an empty conversation that an agent will work on in [workspace]. Its first message names it. */
