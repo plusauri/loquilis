@@ -16,7 +16,7 @@ Loquilis serves every kind of agent, with special consideration for people who w
 
 - **A model runner is not an agent.** Ollama runs models. An agent is a separate program that adds tools on top of a model. A newcomer who only wants answers needs a runner and a model, and no agent at all. So there are two tiers: plain chat with a local model, which is the easy path, and a local agent with tools, which comes later.
 - **Offer a short list, not a fixed "top three".** The best open models change every few months, and the right one depends on the machine's memory and disk. Loquilis checks the machine and recommends from a list it can update without a new release, in place of naming three forever.
-- **Installing is the user's act.** Loquilis points to each project's official installer, or runs it only with clear consent. It never pipes a script from the internet into a shell on its own. Models need the internet once, to download, and that is said plainly.
+- **Installing is the user's choice, and Loquilis carries them through it.** The goal is that a newcomer can use an open model with no terminal and no prior knowledge (Dan, 2026-11-07). So Loquilis notices when no runner is present, offers one clear path, and guides the install with plain steps, a link to the official installer, and a check that it worked. It downloads the recommended model for them, with its size stated and progress shown. It acts only with clear consent, and it never pipes a script from the internet into a shell. Models need the internet once, to download, and that is said plainly.
 - **Say "open" carefully.** Most open models are open-weight, with licenses that vary. The product talks about where the data goes, which is what the person cares about.
 
 ## Terms
