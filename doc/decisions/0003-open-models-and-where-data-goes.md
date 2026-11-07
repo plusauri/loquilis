@@ -2,7 +2,7 @@
 
 ## Status
 
-Direction accepted 2026-11-07 (Dan). Nothing is built. The refinements below are proposals until Dan accepts them. Anything said here about other products comes from memory and is checked before it is built on.
+Direction and refinements accepted 2026-11-07 (Dan). Nothing is built. Claims about other products are checked again before they are built on.
 
 ## The goal, as Dan put it
 
@@ -18,6 +18,26 @@ Loquilis serves every kind of agent, with special consideration for people who w
 - **Offer a short list, not a fixed "top three".** The best open models change every few months, and the right one depends on the machine's memory and disk. Loquilis checks the machine and recommends from a list it can update without a new release, in place of naming three forever.
 - **Installing is the user's act.** Loquilis points to each project's official installer, or runs it only with clear consent. It never pipes a script from the internet into a shell on its own. Models need the internet once, to download, and that is said plainly.
 - **Say "open" carefully.** Most open models are open-weight, with licenses that vary. The product talks about where the data goes, which is what the person cares about.
+
+## Terms
+
+These four layers keep the product, its docs and its code clear:
+
+| Layer | What it is | Cloud example | Local example |
+|---|---|---|---|
+| Model | The trained weights, which only turn text into text | Claude Opus, Grok | Qwen, Llama |
+| Runner | What loads a model and serves it | The provider's servers | Ollama, LM Studio |
+| Agent | The loop that gives a model tools and acts on what it says | Claude Code, the Grok CLI | OpenCode, Aider |
+| Console | Where a person works with an agent or a model | Loquilis | Loquilis |
+
+## Adding, changing and removing options
+
+Keep what changes often in data and what is risky out of reach:
+
+- **A catalog, as data.** Runners, models and agents, with official install links, the memory and disk each needs, and whether it stays local. It is a file Loquilis can refresh without a new release, a copy ships inside so it works offline, and a client console can replace it.
+- **Generic adapters, so a new option needs no code.** One for the OpenAI-compatible HTTP interface that runners commonly serve, and one for the Agent Client Protocol that Grok speaks. `GrokAcpParser` would become the second, with Grok's extras on top. A new runner or agent that speaks either one is then a catalog entry. Which agents support ACP is still to be checked.
+- **A code seam for the rest.** `LibraryState` already takes a map of `Agent`s, so a client console can add its own.
+- **No plugins that download and run code, for now.** A tool whose promise is that data stays private should not run third-party code it fetched.
 
 ## The indicator
 
