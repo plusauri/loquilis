@@ -35,7 +35,7 @@ These four layers keep the product, its docs and its code clear:
 Keep what changes often in data and what is risky out of reach:
 
 - **A catalog, as data.** Runners, models and agents, with official install links, the memory and disk each needs, and whether it stays local. It is a file Loquilis can refresh without a new release, a copy ships inside so it works offline, and a client console can replace it.
-- **Generic adapters, so a new option needs no code.** One for the OpenAI-compatible HTTP interface that runners commonly serve, and one for the Agent Client Protocol that Grok speaks. `GrokAcpParser` would become the second, with Grok's extras on top. A new runner or agent that speaks either one is then a catalog entry. Which agents support ACP is still to be checked.
+- **Generic adapters, so a new option needs no code.** One for the OpenAI-compatible HTTP interface that runners commonly serve, and one for the Agent Client Protocol that Grok speaks. `GrokAcpParser` would become the second, with Grok's extras on top. A new runner or agent that speaks either one is then a catalog entry. OpenCode documents ACP over stdin and stdout as `opencode acp`, so it is the likely first open agent. Others, including Goose and Aider, are still to be checked.
 - **A code seam for the rest.** `LibraryState` already takes a map of `Agent`s, so a client console can add its own.
 - **No plugins that download and run code, for now.** A tool whose promise is that data stays private should not run third-party code it fetched.
 
