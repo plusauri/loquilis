@@ -79,12 +79,13 @@ private fun summaryLine(pager: ConversationPager): String = buildList {
     val conversation = pager.conversation
     conversation.agent?.let { agent ->
         add(agent.reported_model.ifBlank { "unknown model" })
-        if (agent.cli_version.isNotBlank()) add("Claude Code ${agent.cli_version}")
+        if (agent.cli_version.isNotBlank()) add("${agent.cli} ${agent.cli_version}".trim())
     }
-    add("${pager.turnCount} turns")
-    add("${pager.entryCount} entries")
-    add("${pager.rawCount} raw lines")
-    conversation.total_usage?.let { add(money(it.cost_micro_usd)) }
+    add(plural(pager.turnCount, "turn", "turns"))
+    add(plural(pager.entryCount, "entry", "entries"))
+    add(plural(pager.rawCount, "raw line", "raw lines"))
+    // A local model costs nothing, and "$0.000" reads as a bill.
+    conversation.total_usage?.cost_micro_usd?.takeIf { it > 0 }?.let { add(money(it)) }
 }.joinToString(" · ")
 
 /** A row of mutually exclusive choices. */

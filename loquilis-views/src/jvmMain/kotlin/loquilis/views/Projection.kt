@@ -156,7 +156,7 @@ fun workSummary(steps: List<MessageRow.Step>): String {
     else "${plural(calls.size, "tool call", "tool calls")}: ${parts.joinToString(", ")}"
 }
 
-private fun plural(count: Int, one: String, many: String) = "$count ${if (count == 1) one else many}"
+internal fun plural(count: Number, one: String, many: String) = "$count ${if (count.toLong() == 1L) one else many}"
 
 private fun nounOf(kind: ToolKind): Pair<String, String> = when (kind) {
     ToolKind.TOOL_KIND_SHELL -> "command" to "commands"

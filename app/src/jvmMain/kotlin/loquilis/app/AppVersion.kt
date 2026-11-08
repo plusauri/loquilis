@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 3
-    const val LAST_CHANGE = "Plain chat with a local model"
+    private const val PATCH = 4
+    const val LAST_CHANGE = "Header: plurals, agent name, no zero cost"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 
