@@ -115,6 +115,33 @@ class HttpChatSessionTest {
         assertEquals("small:latest", info.info.model)
     }
 
+    @Test fun aCloudModelIsNeverChosenUnasked() {
+        server.createContext("/v1/models") { exchange ->
+            val answer = """{"object":"list","data":[{"id":"gpt-oss:120b-cloud"},{"id":"small:latest"}]}""".toByteArray()
+            exchange.sendResponseHeaders(200, answer.size.toLong())
+            exchange.responseBody.use { it.write(answer) }
+        }
+        replying(chunk("Hi"), "[DONE]")
+        val running = session(model = null)
+        running.send("Hi")
+        running.close()
+        collected(running)
+
+        assertTrue(""""model":"small:latest"""" in requests.single())
+    }
+
+    @Test fun cloudTagsAndLoopbackAddressesAreRecognized() {
+        assertTrue(isCloudModel("gpt-oss:120b-cloud"))
+        assertTrue(isCloudModel("glm-4.6:cloud"))
+        assertFalse(isCloudModel("gemma4:e2b"))
+        assertFalse(isCloudModel("cloudy-model:latest"))
+        assertTrue(isLoopback("http://localhost:11434"))
+        assertTrue(isLoopback("http://127.0.0.1:11434"))
+        assertTrue(isLoopback("http://[::1]:11434"))
+        assertFalse(isLoopback("http://192.168.1.20:11434"))
+        assertFalse(isLoopback("https://api.example.com"))
+    }
+
     @Test fun nothingListeningFailsTheTurnAndSaysWhy() {
         val running = session(base = "http://127.0.0.1:9")
         running.send("Hi")

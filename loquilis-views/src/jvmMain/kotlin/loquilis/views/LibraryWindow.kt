@@ -66,6 +66,7 @@ import loquilis.agents.PermissionAsk
 import loquilis.model.Conversation
 import loquilis.model.Decision
 import loquilis.store.ChatStatus
+import loquilis.store.DataGoes
 
 /** How often a growing conversation is read again. */
 private const val REFRESH_MILLIS = 100L
@@ -196,7 +197,8 @@ private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversati
                 items(state.conversations, key = { it.id }) { conversation ->
                     val asks by state.chat(conversation.id).asks.collectAsState()
                     val showing = conversation.id == state.currentId
-                    ConversationLine(conversation, showing, asks.isNotEmpty(), { state.perform(ConsoleAction.DeleteConversation) }) {
+                    val goes = remember(conversation) { state.dataGoes(conversation.id) }
+                    ConversationLine(conversation, showing, asks.isNotEmpty(), goes, { state.perform(ConsoleAction.DeleteConversation) }) {
                         state.select(conversation.id)
                     }
                 }
@@ -242,7 +244,14 @@ private fun BrandLine(brand: Brand) {
 }
 
 @Composable
-private fun ConversationLine(conversation: Conversation, selected: Boolean, asking: Boolean, onDelete: () -> Unit, onClick: () -> Unit) {
+private fun ConversationLine(
+    conversation: Conversation,
+    selected: Boolean,
+    asking: Boolean,
+    goes: DataGoes,
+    onDelete: () -> Unit,
+    onClick: () -> Unit,
+) {
     val palette = LocalPalette.current
     Row(
         Modifier.fillMaxWidth()
@@ -253,7 +262,7 @@ private fun ConversationLine(conversation: Conversation, selected: Boolean, aski
         Column(Modifier.weight(1f).padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)) {
             Text(conversation.shownTitle, color = palette.ink, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                if (asking) "Waiting for your answer" else place(conversation),
+                if (asking) "Waiting for your answer" else "${goes.mark} ${place(conversation)}",
                 color = if (asking) palette.accent else palette.muted,
                 fontSize = 11.sp,
                 maxLines = 1,
@@ -270,6 +279,22 @@ private fun ConversationLine(conversation: Conversation, selected: Boolean, aski
         }
     }
 }
+
+/** A mark for the conversation list, where there is no room for words. */
+internal val DataGoes.mark: String
+    get() = when (this) {
+        is DataGoes.ToCompany -> "☁️"
+        DataGoes.StaysHere -> "🔒"
+        DataGoes.Unknown -> "❔"
+    }
+
+/** Where data goes, in words a newcomer can act on. Says only what is known. */
+internal val DataGoes.words: String
+    get() = when (this) {
+        is DataGoes.ToCompany -> "Sent to $company"
+        DataGoes.StaysHere -> "Stays on this computer"
+        DataGoes.Unknown -> "Not known where this goes"
+    }
 
 private fun agentLabel(cli: String) = cli.replaceFirstChar(Char::uppercase)
 
@@ -389,7 +414,7 @@ private fun Composer(state: LibraryState, id: String) {
             )
         }
         Row(
-            Modifier.fillMaxWidth().padding(12.dp),
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
@@ -425,6 +450,14 @@ private fun Composer(state: LibraryState, id: String) {
                 enabled = canSend,
             ) { send() }
         }
+        // Read again as the chat moves on, since the model in use is only known once it answers.
+        val goes = remember(id, status) { state.dataGoes(id) }
+        Text(
+            "${goes.mark} ${goes.words}",
+            color = palette.muted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(start = 26.dp, end = 16.dp, top = 5.dp, bottom = 9.dp),
+        )
     }
 }
 

@@ -38,7 +38,7 @@ class LibraryWindowTest {
     private fun fake(body: String): Agent {
         val script = dir.resolve("fake-claude.sh")
         script.writeText("#!/bin/sh\n$body\n")
-        return ClaudeAgent(command = listOf("/bin/sh", script.toString()))
+        return ClaudeAgent(command = listOf("/bin/sh", script.toString()), env = emptyMap())
     }
 
     private val answers: Agent get() = fake(
@@ -85,6 +85,7 @@ class LibraryWindowTest {
         waitUntil(timeoutMillis = 5_000) { state.current!!.pager.conversation.title == "Tell me about plovers" }
         assertEquals(1, state.current!!.pager.turnCount)
         showing("Tell me about plovers")
+        showing("☁️ Sent to Anthropic")
         shot("chat")
         state.close()
     }

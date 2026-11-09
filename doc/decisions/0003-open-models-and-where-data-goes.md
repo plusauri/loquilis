@@ -2,7 +2,7 @@
 
 ## Status
 
-Direction and refinements accepted 2026-11-07 (Dan). Plain chat is built, as `LocalChatAgent`, `HttpChatSession` and `OpenAiChatParser`. On 2026-11-08 it ran against real Ollama 0.40.15 with `gemma4:e2b`: found with no setup, word by word, and Stop kept the partial reply. The rest is not built. Claims about other products are checked again before they are built on.
+Direction and refinements accepted 2026-11-07 (Dan). Plain chat is built, as `LocalChatAgent`, `HttpChatSession` and `OpenAiChatParser`. On 2026-11-08 it ran against real Ollama 0.40.15 with `gemma4:e2b`: found with no setup, word by word, and Stop kept the partial reply. The indicator is built as `Agent.dataGoes` and `DataGoes`: under the message box in words, and as a mark in the conversation list. Claude reads as Anthropic unless `ANTHROPIC_BASE_URL`, Bedrock or Vertex redirects it (then unknown), Grok as xAI, and plain local chat as this computer when the runner's address is loopback and the model is not an Ollama cloud model, which plain chat never picks unasked. The rest is not built. Claims about other products are checked again before they are built on.
 
 ## The goal, as Dan put it
 

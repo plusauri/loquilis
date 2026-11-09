@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 5
-    const val LAST_CHANGE = "Stop is red with a stop square"
+    private const val PATCH = 6
+    const val LAST_CHANGE = "Shows where data goes"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 

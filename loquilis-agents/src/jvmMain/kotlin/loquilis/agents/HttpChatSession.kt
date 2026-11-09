@@ -185,8 +185,9 @@ class HttpChatSession(
             throw IOException("Nothing answered at $baseUrl. Is the model runner started?", failure)
         }
         val listed = (Json.parseToJsonElement(answer.body()) as? JsonObject)?.get("data") as? JsonArray
-        return (listed?.firstOrNull() as? JsonObject)?.str("id")
-            ?: throw IOException("The model runner at $baseUrl has no models yet. Download one first.")
+        // A cloud model would send the conversation away, so one is used only when asked for by name.
+        return listed.orEmpty().mapNotNull { (it as? JsonObject)?.str("id") }.firstOrNull { !isCloudModel(it) }
+            ?: throw IOException("The model runner at $baseUrl has no models on this computer yet. Download one first.")
     }
 
     private fun refusal(response: HttpResponse<InputStream>): String {
@@ -212,4 +213,19 @@ class HttpChatSession(
     private companion object {
         const val STOPPED = """{"stream_ended":"stopped"}"""
     }
+}
+
+/**
+ * Whether [model] is one Ollama runs in its own cloud, which its tag says: `gpt-oss:120b-cloud`, `glm-4.6:cloud`.
+ * Such a model is listed beside local ones and answers at the same local address.
+ */
+fun isCloudModel(model: String): Boolean {
+    val tag = model.substringAfter(':', "")
+    return tag == "cloud" || tag.endsWith("-cloud")
+}
+
+/** Whether [baseUrl] names this computer, so nothing sent to it crosses the network. */
+fun isLoopback(baseUrl: String): Boolean {
+    val host = runCatching { URI.create(baseUrl).host }.getOrNull()?.removeSurrounding("[", "]") ?: return false
+    return host == "localhost" || host == "::1" || host.startsWith("127.")
 }

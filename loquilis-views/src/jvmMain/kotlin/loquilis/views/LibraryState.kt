@@ -10,6 +10,7 @@ import com.squareup.wire.Instant
 import java.nio.file.Path
 import loquilis.model.Conversation
 import loquilis.store.Agent
+import loquilis.store.DataGoes
 import loquilis.store.LiveChat
 import loquilis.store.Store
 import loquilis.store.newConversation
@@ -55,6 +56,9 @@ class LibraryState(
     /** A stored conversation goes on with the agent that had it, or the first one if that one is not here. */
     private fun agentOf(conversationId: String): Agent =
         agents[store.conversation(conversationId)?.agent?.cli] ?: agents.values.first()
+
+    /** Where what is written in [conversationId] goes, as its agent can tell from what it uses. */
+    fun dataGoes(conversationId: String): DataGoes = agentOf(conversationId).dataGoes(store.conversation(conversationId))
 
     fun select(conversationId: String) {
         val showing = current

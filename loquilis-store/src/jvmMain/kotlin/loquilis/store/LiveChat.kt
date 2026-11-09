@@ -2,6 +2,8 @@ package loquilis.store
 
 import loquilis.agents.ChatMessage
 import loquilis.agents.HttpChatSession
+import loquilis.agents.isCloudModel
+import loquilis.agents.isLoopback
 import loquilis.agents.OpenAiChatParser
 import loquilis.model.TextRole
 import com.squareup.wire.Instant
@@ -52,10 +54,38 @@ interface Agent {
 
     /** Whether this one works on a folder of files, which the host then has to ask for. */
     val needsFolder: Boolean get() = true
+
+    /** Where what is written in [conversation] goes. Unknown unless the agent can say from what it uses. */
+    fun dataGoes(conversation: Conversation?): DataGoes = DataGoes.Unknown
+}
+
+/**
+ * Where a conversation's words go, from the addresses and settings actually in use, never from a name.
+ * Doubt reads as [Unknown], never as the safe answer.
+ */
+sealed interface DataGoes {
+    /** To [company]'s servers, which run the model. */
+    data class ToCompany(val company: String) : DataGoes
+
+    /** To a runner on this computer, with no tools that could reach further. */
+    data object StaysHere : DataGoes
+
+    data object Unknown : DataGoes
 }
 
 /** `claude`, in its one-process-per-conversation form. A conversation carries on through `--resume`. */
-class ClaudeAgent(private val extraArgs: List<String> = emptyList(), private val command: List<String> = listOf("claude")) : Agent {
+class ClaudeAgent(
+    private val extraArgs: List<String> = emptyList(),
+    private val command: List<String> = listOf("claude"),
+    private val env: Map<String, String> = System.getenv(),
+) : Agent {
+    /**
+     * Anthropic, unless `claude` was pointed elsewhere: another address, or a cloud that resells the model.
+     * Even pointed at this computer it may still report to Anthropic, so anything else is unknown.
+     */
+    override fun dataGoes(conversation: Conversation?): DataGoes =
+        if (REDIRECTS.any { !env[it].isNullOrBlank() }) DataGoes.Unknown else DataGoes.ToCompany("Anthropic")
+
     override fun parser(conversationId: String, blobs: BlobSink, newId: () -> String): AgentParser =
         ClaudeStreamParser(conversationId, ContentFactory(blobs), newId)
 
@@ -69,10 +99,16 @@ class ClaudeAgent(private val extraArgs: List<String> = emptyList(), private val
             firstRawSeq = firstRawSeq,
             command = command,
         )
+
+    private companion object {
+        val REDIRECTS = listOf("ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX")
+    }
 }
 
 /** `grok`, in its one-process-per-conversation form. A conversation carries on through its session id. */
 class GrokAgent(private val command: List<String> = listOf("grok")) : Agent {
+    override fun dataGoes(conversation: Conversation?): DataGoes = DataGoes.ToCompany("xAI")
+
     override fun parser(conversationId: String, blobs: BlobSink, newId: () -> String): AgentParser =
         GrokAcpParser(conversationId, ContentFactory(blobs), newId)
 
@@ -93,6 +129,19 @@ class GrokAgent(private val command: List<String> = listOf("grok")) : Agent {
  */
 class LocalChatAgent(private val store: Store, private val baseUrl: String = "http://localhost:11434") : Agent {
     override val needsFolder = false
+
+    /**
+     * On this computer when the runner is, and the model is not one the runner forwards to its maker's cloud.
+     * Plain chat has no tools, so nothing else can send it on.
+     */
+    override fun dataGoes(conversation: Conversation?): DataGoes {
+        val model = listOfNotNull(conversation?.agent?.reported_model, conversation?.agent?.model).firstOrNull(String::isNotEmpty)
+        return when {
+            !isLoopback(baseUrl) -> DataGoes.Unknown
+            model != null && isCloudModel(model) -> DataGoes.ToCompany("Ollama")
+            else -> DataGoes.StaysHere
+        }
+    }
 
     override fun parser(conversationId: String, blobs: BlobSink, newId: () -> String): AgentParser =
         OpenAiChatParser(conversationId, ContentFactory(blobs), newId)
