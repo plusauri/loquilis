@@ -323,17 +323,32 @@ private fun AskCard(ask: PermissionAsk, more: Int, onAnswer: (Decision) -> Unit)
 }
 
 @Composable
-private fun ComposerButton(label: String, background: Color, ink: Color, enabled: Boolean = true, onClick: () -> Unit) {
-    Text(
-        label,
-        color = ink,
-        fontSize = 13.sp,
-        modifier = Modifier
+private fun ComposerButton(
+    label: String,
+    background: Color,
+    ink: Color,
+    enabled: Boolean = true,
+    leading: (@Composable () -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
             .clip(RoundedCornerShape(18.dp))
             .background(background)
             .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 9.dp),
-    )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        leading?.invoke()
+        Text(label, color = ink, fontSize = 13.sp)
+    }
+}
+
+/** A stop square, the sign media players use, so Stop stands out from Send while the agent works. */
+@Composable
+private fun StopSquare(ink: Color) {
+    Box(Modifier.size(9.dp).clip(RoundedCornerShape(1.5.dp)).background(ink))
 }
 
 /** Return sends and Shift-Return starts a new line. What the agent never got comes back here. */
@@ -402,7 +417,7 @@ private fun Composer(state: LibraryState, id: String) {
                     }
                 },
             )
-            if (status is ChatStatus.Working) ComposerButton("Stop", palette.line, palette.failed) { chat.interrupt() }
+            if (status is ChatStatus.Working) ComposerButton("Stop", palette.failed, Color.White, leading = { StopSquare(Color.White) }) { chat.interrupt() }
             ComposerButton(
                 "Send",
                 if (canSend) palette.accent else palette.line,

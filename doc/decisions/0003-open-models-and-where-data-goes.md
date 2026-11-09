@@ -2,7 +2,7 @@
 
 ## Status
 
-Direction and refinements accepted 2026-11-07 (Dan). Plain chat is built, as `LocalChatAgent`, `HttpChatSession` and `OpenAiChatParser`, and has only run against a stand-in server. The rest is not built. Claims about other products are checked again before they are built on.
+Direction and refinements accepted 2026-11-07 (Dan). Plain chat is built, as `LocalChatAgent`, `HttpChatSession` and `OpenAiChatParser`. On 2026-11-08 it ran against real Ollama 0.40.15 with `gemma4:e2b`: found with no setup, word by word, and Stop kept the partial reply. The rest is not built. Claims about other products are checked again before they are built on.
 
 ## The goal, as Dan put it
 
@@ -36,6 +36,7 @@ Keep what changes often in data and what is risky out of reach:
 
 - **A catalog, as data.** Runners, models and agents, with official install links, the memory and disk each needs, and whether it stays local. It is a file Loquilis can refresh without a new release, a copy ships inside so it works offline, and a client console can replace it.
 - **Generic adapters, so a new option needs no code.** One for the OpenAI-compatible HTTP interface that runners commonly serve, and one for the Agent Client Protocol that Grok speaks. `GrokAcpParser` would become the second, with Grok's extras on top. A new runner or agent that speaks either one is then a catalog entry. OpenCode documents ACP over stdin and stdout as `opencode acp`, so it is the likely first open agent. Others, including Goose and Aider, are still to be checked.
+- **Memory is the first thing a newcomer feels.** On the first real run, a 16 GB Mac with other work open felt the system jitter while `gemma4:e2b` (7.5 GB on disk) loaded and answered. So the catalog recommends by memory free at the time, not only installed, says before a download what the model will take while it runs, and the console can tell the runner to unload the model when a conversation goes idle, since Ollama by default keeps it loaded for a few minutes.
 - **A code seam for the rest.** `LibraryState` already takes a map of `Agent`s, so a client console can add its own.
 - **No plugins that download and run code, for now.** A tool whose promise is that data stays private should not run third-party code it fetched.
 
