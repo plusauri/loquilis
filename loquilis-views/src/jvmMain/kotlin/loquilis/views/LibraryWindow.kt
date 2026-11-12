@@ -18,6 +18,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
@@ -103,10 +105,39 @@ fun LibraryWindow(
             .focusRequester(keyFocus)
             .focusable(),
     ) {
-        Library(state, brand, onNewConversation)
+        val begin: (String) -> Unit = { agent -> scope.launch { if (state.prepare(agent)) onNewConversation(agent) } }
+        Library(state, brand, begin)
+        state.setup?.let { setup ->
+            SetupPanel(setup, onClose = { state.setup = null }) {
+                state.setup = null
+                onNewConversation(setup.agent)
+            }
+        }
         state.deleting?.let { conversation ->
             ConfirmDelete(conversation, onCancel = { state.deleting = null }) { scope.launch { state.confirmDelete() } }
         }
+    }
+}
+
+/** A card over the window that a click outside closes. Every one the console shows comes through here. */
+@Composable
+internal fun Modal(onDismiss: () -> Unit, width: Dp = 380.dp, content: @Composable ColumnScope.() -> Unit) {
+    val palette = LocalPalette.current
+    Box(
+        Modifier.fillMaxSize()
+            .background(palette.ink.copy(alpha = 0.25f))
+            .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.width(width)
+                .clip(RoundedCornerShape(12.dp))
+                .background(palette.page)
+                .clickable(remember { MutableInteractionSource() }, indication = null) {}
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content,
+        )
     }
 }
 
@@ -114,32 +145,18 @@ fun LibraryWindow(
 @Composable
 private fun ConfirmDelete(conversation: Conversation, onCancel: () -> Unit, onDelete: () -> Unit) {
     val palette = LocalPalette.current
-    Box(
-        Modifier.fillMaxSize()
-            .background(palette.ink.copy(alpha = 0.25f))
-            .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onCancel),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            Modifier.width(380.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(palette.page)
-                .clickable(remember { MutableInteractionSource() }, indication = null) {}
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text("Delete “${conversation.shownTitle}”?", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            Text(
-                "This removes the conversation and everything recorded for it from this library. It cannot be undone. " +
-                    "The agent's own session history stays where the agent keeps it.",
-                color = palette.muted,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-            )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                ComposerButton("Cancel", palette.line, palette.ink, onClick = onCancel)
-                ComposerButton("Delete", palette.line, palette.failed, onClick = onDelete)
-            }
+    Modal(onCancel) {
+        Text("Delete “${conversation.shownTitle}”?", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            "This removes the conversation and everything recorded for it from this library. It cannot be undone. " +
+                "The agent's own session history stays where the agent keeps it.",
+            color = palette.muted,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+            ComposerButton("Cancel", palette.line, palette.ink, onClick = onCancel)
+            ComposerButton("Delete", palette.line, palette.failed, onClick = onDelete)
         }
     }
 }
@@ -367,7 +384,7 @@ private fun AskCard(ask: PermissionAsk, more: Int, onAnswer: (Decision) -> Unit)
 }
 
 @Composable
-private fun ComposerButton(
+internal fun ComposerButton(
     label: String,
     background: Color,
     ink: Color,

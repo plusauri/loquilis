@@ -8,6 +8,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.squareup.wire.Instant
 import java.nio.file.Path
+import loquilis.agents.OllamaSetup
+import loquilis.agents.RunnerState
 import loquilis.model.Conversation
 import loquilis.store.Agent
 import loquilis.store.DataGoes
@@ -24,6 +26,8 @@ class LibraryState(
     private val agents: Map<String, Agent>,
     first: String? = null,
     private val now: () -> Instant = { java.time.Instant.now() },
+    /** What an agent needs set up first, such as a runner and a model, by agent name. */
+    private val setups: Map<String, OllamaSetup> = emptyMap(),
 ) {
     constructor(store: Store, agent: Agent, first: String? = null, now: () -> Instant = { java.time.Instant.now() }) :
         this(store, mapOf(DEFAULT_AGENT to agent), first, now)
@@ -40,6 +44,19 @@ class LibraryState(
         private set
 
     private val chats = HashMap<String, LiveChat>()
+
+    /** The setup showing, for an agent that is not ready to start. */
+    var setup by mutableStateOf<SetupState?>(null)
+
+    /** Whether [agent] can start a conversation now. If not, shows its setup and says no. */
+    suspend fun prepare(agent: String): Boolean {
+        val needed = setups[agent] ?: return true
+        val shown = SetupState(agent, needed)
+        shown.refresh()
+        if (shown.runner is RunnerState.Ready) return true
+        setup = shown
+        return false
+    }
 
     /** The conversation waiting on the user to confirm its deletion. */
     var deleting by mutableStateOf<Conversation?>(null)

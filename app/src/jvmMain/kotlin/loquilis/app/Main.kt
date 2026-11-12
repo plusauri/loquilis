@@ -15,6 +15,7 @@ import java.awt.Taskbar
 import java.awt.image.BufferedImage
 import java.nio.file.Path
 import javax.imageio.ImageIO
+import loquilis.agents.OllamaSetup
 import loquilis.store.ClaudeAgent
 import loquilis.store.GrokAgent
 import loquilis.views.LibraryState
@@ -32,7 +33,12 @@ fun main(args: Array<String>) {
     val icon = readAppIcon()
     showInDock(icon)
     val library = openArgument(args.firstOrNull())
-    val state = LibraryState(library.store, mapOf("claude" to ClaudeAgent(), "grok" to GrokAgent(), "local" to LocalChatAgent(library.store)), library.conversationId)
+    val state = LibraryState(
+        library.store,
+        mapOf("claude" to ClaudeAgent(), "grok" to GrokAgent(), "local" to LocalChatAgent(library.store)),
+        library.conversationId,
+        setups = mapOf("local" to OllamaSetup()),
+    )
     // A hook, not a finally: application() ends the process itself when the window closes.
     Runtime.getRuntime().addShutdownHook(
         Thread {
