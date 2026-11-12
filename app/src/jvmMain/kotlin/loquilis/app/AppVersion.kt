@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 8
-    const val LAST_CHANGE = "Guided Ollama setup and model download"
+    private const val PATCH = 9
+    const val LAST_CHANGE = "Choose a model for each local conversation"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 

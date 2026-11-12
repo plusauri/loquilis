@@ -9,7 +9,6 @@ import androidx.compose.runtime.setValue
 import com.squareup.wire.Instant
 import java.nio.file.Path
 import loquilis.agents.OllamaSetup
-import loquilis.agents.RunnerState
 import loquilis.model.Conversation
 import loquilis.store.Agent
 import loquilis.store.DataGoes
@@ -48,15 +47,22 @@ class LibraryState(
     /** The setup showing, for an agent that is not ready to start. */
     var setup by mutableStateOf<SetupState?>(null)
 
-    /** Whether [agent] can start a conversation now. If not, shows its setup and says no. */
+    /**
+     * Whether [agent] can start a conversation now. One with a setup always shows it, which is also where
+     * its model is chosen, and says no.
+     */
     suspend fun prepare(agent: String): Boolean {
         val needed = setups[agent] ?: return true
-        val shown = SetupState(agent, needed)
-        shown.refresh()
-        if (shown.runner is RunnerState.Ready) return true
+        val shown = SetupState(agent, needed, lastUsed = lastModel(agent))
         setup = shown
+        shown.refresh()
         return false
     }
+
+    /** The model [agent]'s latest conversation used, so it can be offered first. */
+    private fun lastModel(agent: String): String? = conversations
+        .filter { it.agent?.cli == agent }
+        .firstNotNullOfOrNull { conversation -> listOfNotNull(conversation.agent?.reported_model, conversation.agent?.model).firstOrNull(String::isNotEmpty) }
 
     /** The conversation waiting on the user to confirm its deletion. */
     var deleting by mutableStateOf<Conversation?>(null)
@@ -83,8 +89,8 @@ class LibraryState(
     }
 
     /** Starts a conversation for [agent] to work on in [workspace], and shows it. */
-    fun newConversation(workspace: Path, agent: String = agentNames.first()) {
-        val conversation = store.newConversation(workspace, now(), cli = agent)
+    fun newConversation(workspace: Path, agent: String = agentNames.first(), model: String = "") {
+        val conversation = store.newConversation(workspace, now(), cli = agent, model = model)
         refreshList()
         select(conversation.id)
     }

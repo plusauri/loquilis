@@ -30,6 +30,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -85,7 +87,7 @@ fun LibraryWindow(
     state: LibraryState,
     brand: Brand? = null,
     keys: KeyBindings = DefaultKeys,
-    onNewConversation: (agent: String) -> Unit,
+    onNewConversation: (agent: String, model: String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val keyFocus = remember { FocusRequester() }
@@ -97,6 +99,15 @@ fun LibraryWindow(
                 val action = keys.actionFor(event)
                 when {
                     state.deleting != null && event.key == Key.Escape -> true.also { state.deleting = null }
+                    state.setup != null && event.key == Key.Escape -> true.also { if (state.setup?.pulling == null) state.setup = null }
+                    state.setup != null && event.key == Key.Enter -> true.also {
+                        val setup = state.setup
+                        val first = setup?.installed?.firstOrNull()
+                        if (setup != null && first != null && setup.pulling == null) {
+                            state.setup = null
+                            onNewConversation(setup.agent, first)
+                        }
+                    }
                     state.deleting != null && event.key == Key.Enter -> true.also { scope.launch { state.confirmDelete() } }
                     action != null -> true.also { state.perform(action) }
                     else -> false
@@ -105,12 +116,12 @@ fun LibraryWindow(
             .focusRequester(keyFocus)
             .focusable(),
     ) {
-        val begin: (String) -> Unit = { agent -> scope.launch { if (state.prepare(agent)) onNewConversation(agent) } }
+        val begin: (String) -> Unit = { agent -> scope.launch { if (state.prepare(agent)) onNewConversation(agent, "") } }
         Library(state, brand, begin)
         state.setup?.let { setup ->
-            SetupPanel(setup, onClose = { state.setup = null }) {
+            SetupPanel(setup, onClose = { state.setup = null }) { model ->
                 state.setup = null
-                onNewConversation(setup.agent)
+                onNewConversation(setup.agent, model)
             }
         }
         state.deleting?.let { conversation ->
@@ -131,9 +142,11 @@ internal fun Modal(onDismiss: () -> Unit, width: Dp = 380.dp, content: @Composab
     ) {
         Column(
             Modifier.width(width)
+                .padding(vertical = 24.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(palette.page)
                 .clickable(remember { MutableInteractionSource() }, indication = null) {}
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
             content = content,

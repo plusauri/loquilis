@@ -55,9 +55,9 @@ fun main(args: Array<String>) {
             icon = mark,
             state = rememberWindowState(width = 1320.dp, height = 880.dp),
         ) {
-            ReviewTheme { LibraryWindow(state, brand) { agent ->
+            ReviewTheme { LibraryWindow(state, brand) { agent, model ->
                     val folder = if (state.needsFolder(agent)) chooseFolder() else Path.of("")
-                    folder?.let { state.newConversation(it, agent) }
+                    folder?.let { state.newConversation(it, agent, model) }
                 } }
         }
     }

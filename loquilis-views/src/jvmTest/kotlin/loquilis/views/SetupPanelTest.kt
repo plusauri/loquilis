@@ -10,6 +10,9 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import com.sun.net.httpserver.HttpServer
 import java.io.File
@@ -25,6 +28,7 @@ import loquilis.agents.OllamaSetup
 import loquilis.store.LocalChatAgent
 import loquilis.store.SqliteStore
 import loquilis.store.Store
+import loquilis.store.newConversation
 
 /** The setup card, with a small server standing in for Ollama. */
 class SetupPanelTest {
@@ -62,7 +66,7 @@ class SetupPanelTest {
 
     private fun ComposeUiTest.open(setup: OllamaSetup): LibraryState {
         val state = LibraryState(store, mapOf("local" to LocalChatAgent(store, url)), setups = mapOf("local" to setup))
-        setContent { ReviewTheme { LibraryWindow(state) { agent -> state.newConversation(dir, agent) } } }
+        setContent { ReviewTheme { LibraryWindow(state) { agent, model -> state.newConversation(dir, agent, model) } } }
         waitForIdle()
         return state
     }
@@ -78,7 +82,7 @@ class SetupPanelTest {
 
     @Test fun withNoModelTheCardOffersOneAndTheConversationStartsOnceItIsDownloaded() = runDesktopComposeUiTest(1100, 760) {
         val state = open(OllamaSetup(url, emptyList()))
-        onNodeWithText("New conversation").performClick()
+        onAllNodesWithText("New conversation")[0].performClick()
         showing("Suits this computer")
         assertEquals(0, state.conversations.size, "no conversation before a model is here")
         shot("setup-models")
@@ -92,13 +96,14 @@ class SetupPanelTest {
         release.countDown()
         waitUntil(timeoutMillis = 10_000) { state.conversations.size == 1 }
         assertEquals(null, state.setup)
+        assertEquals("gemma3:4b", state.conversations.single().agent?.model, "the downloaded model is the one used")
         showing("Stays on this computer")
         state.close()
     }
 
     @Test fun withNoOllamaTheCardSendsThePersonToItsSite() = runDesktopComposeUiTest(1100, 760) {
         val state = open(OllamaSetup("http://127.0.0.1:1", emptyList()))
-        onNodeWithText("New conversation").performClick()
+        onAllNodesWithText("New conversation")[0].performClick()
         showing("Get Ollama")
         shot("setup-install")
         onNodeWithText("Close").performClick()
@@ -106,12 +111,34 @@ class SetupPanelTest {
         state.close()
     }
 
-    @Test fun aReadyRunnerStartsAtOnce() = runDesktopComposeUiTest(1100, 760) {
-        models = """[{"name":"gemma3:4b"}]"""
+    @Test fun aReadyRunnerOffersItsModelsWithTheLastUsedFirst() = runDesktopComposeUiTest(1100, 760) {
+        models = """[{"name":"gemma3:1b"},{"name":"gemma3:4b"}]"""
+        store.newConversation(dir, java.time.Instant.now(), cli = "local", model = "gemma3:4b")
         val state = open(OllamaSetup(url, emptyList()))
-        onNodeWithText("New conversation").performClick()
-        waitUntil(timeoutMillis = 10_000) { state.conversations.size == 1 }
+        onAllNodesWithText("New conversation")[0].performClick()
+        showing("Choose a model")
+        showing("Or download another")
+        shot("setup-choose")
+        onAllNodesWithText("Start")[0].performClick()
+        waitUntil(timeoutMillis = 10_000) { state.conversations.size == 2 }
         assertEquals(null, state.setup)
+        assertEquals("gemma3:4b", state.conversations.first { it.id == state.currentId }.agent?.model)
+        state.close()
+    }
+
+    @Test fun returnStartsWithTheFirstModelAndEscapeCloses() = runDesktopComposeUiTest(1100, 760) {
+        models = """[{"name":"gemma3:1b"}]"""
+        val state = open(OllamaSetup(url, emptyList()))
+        onAllNodesWithText("New conversation")[0].performClick()
+        showing("Choose a model")
+        onRoot().performKeyInput { pressKey(Key.Escape) }
+        waitUntil(timeoutMillis = 5_000) { state.setup == null }
+
+        onAllNodesWithText("New conversation")[0].performClick()
+        showing("Choose a model")
+        onRoot().performKeyInput { pressKey(Key.Enter) }
+        waitUntil(timeoutMillis = 10_000) { state.conversations.size == 1 }
+        assertEquals("gemma3:1b", state.conversations.single().agent?.model)
         state.close()
     }
 }

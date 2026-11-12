@@ -50,7 +50,8 @@ data class PullProgress(val status: String, val completed: Long, val total: Long
 class OllamaSetup(
     private val baseUrl: String = "http://localhost:11434",
     private val installedAt: List<File> = DEFAULT_PLACES,
-    private val launch: List<String> = listOf("open", "-a", "Ollama"),
+    /** `-g` leaves Loquilis in front, so a newcomer stays on the card and not on Ollama's own welcome. */
+    private val launch: List<String> = listOf("open", "-g", "-a", "Ollama"),
 ) {
     private val client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build()
 

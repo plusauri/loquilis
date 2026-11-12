@@ -45,6 +45,8 @@ class SetupState(
     val models: List<CatalogModel> = OllamaSetup.catalog,
     val memoryGb: Double = OllamaSetup.installedMemoryGb(),
     val freeDiskGb: () -> Double = OllamaSetup::freeDiskGb,
+    /** The model this agent's latest conversation used, offered first. */
+    private val lastUsed: String? = null,
 ) {
     var runner by mutableStateOf<RunnerState?>(null)
         private set
@@ -58,6 +60,17 @@ class SetupState(
     /** The model suggested for this computer, listed first. */
     val recommended: CatalogModel get() = OllamaSetup.recommend(models, memoryGb)
 
+    /** The models on this computer, the one used last first. Empty until the runner is ready. */
+    val installed: List<String>
+        get() = (runner as? RunnerState.Ready)?.models.orEmpty().sortedByDescending { it == lastUsed }
+
+    /** Catalog models not on this computer yet, the recommended one first. */
+    val offered: List<CatalogModel>
+        get() {
+            val here = installed.toSet()
+            return (listOf(recommended) + (models - recommended)).filter { it.name !in here }
+        }
+
     private var download: Job? = null
 
     suspend fun refresh() {
@@ -66,15 +79,20 @@ class SetupState(
 
     fun start() = setup.start()
 
-    /** Downloads [model] into the runner. Ends quietly when [cancel]led and says why when it fails. */
-    suspend fun download(model: CatalogModel) {
+    /**
+     * Downloads [model] into the runner and says whether it arrived. Ends quietly when [cancel]led and says
+     * why when it fails.
+     */
+    suspend fun download(model: CatalogModel): Boolean {
         pulling = model
         problem = null
-        try {
+        return try {
             runInterruptible(Dispatchers.IO) { setup.pull(model.name) { progress = it } }
             refresh()
+            true
         } catch (failure: IOException) {
             problem = failure.message
+            false
         } finally {
             pulling = null
             progress = null
@@ -92,17 +110,17 @@ class SetupState(
 
 /**
  * Takes a newcomer from no runner to a model that answers, a step at a time and nothing without a click:
- * get Ollama from its own site, start it, then download a model chosen for this computer.
+ * get Ollama from its own site, start it, download a model chosen for this computer. Once one is here, it
+ * is where each conversation's model is chosen. Return starts with the first, Escape closes.
  */
 @Composable
-internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onReady: () -> Unit) {
+internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onStart: (model: String) -> Unit) {
     val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
     val runner = setup.runner
 
     // Notices Ollama arriving or starting without asking the person to check.
     LaunchedEffect(runner, setup.pulling) {
-        if (runner is RunnerState.Ready) onReady()
         while (setup.pulling == null && (runner == RunnerState.NotInstalled || runner == RunnerState.NotRunning)) {
             delay(POLL_MILLIS)
             setup.refresh()
@@ -110,23 +128,34 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onReady: () -> U
     }
 
     Modal(onDismiss = { if (setup.pulling == null) onClose() }, width = 460.dp) {
-        Text("Set up a model on this computer", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        val ready = runner is RunnerState.Ready
+        Text(if (ready) "Choose a model" else "Set up a model on this computer", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
         DataGoesLine(DataGoes.StaysHere, "What you write here stays on this computer.")
         when (runner) {
             null -> Note("Checking this computer…")
-            RunnerState.NotInstalled -> {
+            RunnerState.NotInstalled ->
                 Note("A model runs inside Ollama, a free app. Get it from Ollama's own site and install it like any other app, then open it once. This card notices when it is ready.")
-            }
             RunnerState.NotRunning -> Note("Ollama is installed but not running. Starting it opens the Ollama app, and this card notices when it is ready.")
             RunnerState.NoModels, is RunnerState.Ready -> {
-                Note("Ollama is ready. Choose a model to download. It is yours to keep, and later conversations start at once.")
-                val recommended = setup.recommended
-                (listOf(recommended) + (setup.models - recommended)).forEach { model ->
-                    ModelChoice(model, model == recommended, setup) {
-                        setup.track(scope.launch { setup.download(model) })
+                setup.installed.forEachIndexed { index, name ->
+                    InstalledChoice(name, setup.models.firstOrNull { it.name == name }, first = index == 0, enabled = setup.pulling == null) { onStart(name) }
+                }
+                val offered = setup.offered
+                if (offered.isNotEmpty()) {
+                    Note(
+                        if (ready) "Or download another. It is yours to keep."
+                        else "Ollama is ready. Choose a model to download. It is yours to keep, and later conversations start at once.",
+                    )
+                    offered.forEach { model ->
+                        ModelChoice(model, model == setup.recommended, setup, prominent = !ready) {
+                            setup.track(scope.launch { if (setup.download(model)) onStart(model.name) })
+                        }
                     }
                 }
             }
+        }
+        if (runner == RunnerState.NotInstalled || runner == RunnerState.NotRunning) {
+            Note("Ollama may show its own welcome the first time. You can close it. Signing in is not needed for models on this computer.")
         }
         setup.problem?.let { Text(it, color = palette.failed, fontSize = 12.sp) }
         Buttons {
@@ -144,8 +173,31 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onReady: () -> U
     }
 }
 
+/** A model already on this computer, one click from a conversation. */
 @Composable
-private fun ModelChoice(model: CatalogModel, recommended: Boolean, setup: SetupState, onDownload: () -> Unit) {
+private fun InstalledChoice(name: String, known: CatalogModel?, first: Boolean, enabled: Boolean, onStart: () -> Unit) {
+    val palette = LocalPalette.current
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .border(1.dp, if (first) palette.accent else palette.line, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(known?.label ?: name, color = palette.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                listOfNotNull(name.takeIf { known != null }, known?.let { "about ${gb(it.memoryGb)} of memory while it answers" }).joinToString(" · ").ifEmpty { "On this computer" },
+                color = palette.muted,
+                fontSize = 11.sp,
+            )
+        }
+        if (enabled) ComposerButton("Start", if (first) palette.accent else palette.line, if (first) palette.userInk else palette.ink, onClick = onStart)
+    }
+}
+
+@Composable
+private fun ModelChoice(model: CatalogModel, recommended: Boolean, setup: SetupState, prominent: Boolean, onDownload: () -> Unit) {
     val palette = LocalPalette.current
     val pulling = setup.pulling
     val freeGb = setup.freeDiskGb()
@@ -153,7 +205,7 @@ private fun ModelChoice(model: CatalogModel, recommended: Boolean, setup: SetupS
     Column(
         Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .border(1.dp, if (recommended) palette.accent else palette.line, RoundedCornerShape(10.dp))
+            .border(1.dp, if (recommended && prominent) palette.accent else palette.line, RoundedCornerShape(10.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
@@ -171,7 +223,10 @@ private fun ModelChoice(model: CatalogModel, recommended: Boolean, setup: SetupS
             pulling == model -> Progress(setup.progress)
             pulling != null -> {}
             !roomy -> Text("Needs ${gb(model.downloadGb + DISK_SPARE_GB)} of free disk; this computer has ${gb(freeGb)}.", color = palette.failed, fontSize = 11.sp)
-            else -> Buttons { ComposerButton("Download", if (recommended) palette.accent else palette.line, if (recommended) palette.userInk else palette.ink, onClick = onDownload) }
+            else -> Buttons {
+                val lead = recommended && prominent
+                ComposerButton("Download", if (lead) palette.accent else palette.line, if (lead) palette.userInk else palette.ink, onClick = onDownload)
+            }
         }
     }
 }

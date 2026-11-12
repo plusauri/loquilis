@@ -53,7 +53,7 @@ class LibraryWindowTest {
 
     private fun ComposeUiTest.open(agent: Agent): LibraryState {
         val state = LibraryState(store, agent)
-        setContent { ReviewTheme { LibraryWindow(state) { state.newConversation(dir) } } }
+        setContent { ReviewTheme { LibraryWindow(state) { _, _ -> state.newConversation(dir) } } }
         waitForIdle()
         return state
     }
