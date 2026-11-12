@@ -29,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollbarAdapter
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
@@ -261,13 +262,11 @@ private fun ConversationLine(
     ) {
         Column(Modifier.weight(1f).padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)) {
             Text(conversation.shownTitle, color = palette.ink, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                if (asking) "Waiting for your answer" else "${goes.mark} ${place(conversation)}",
-                color = if (asking) palette.accent else palette.muted,
-                fontSize = 11.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (asking) {
+                Text("Waiting for your answer", color = palette.accent, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else {
+                DataGoesLine(goes, place(conversation))
+            }
         }
         if (selected) {
             Text(
@@ -280,13 +279,33 @@ private fun ConversationLine(
     }
 }
 
-/** A mark for the conversation list, where there is no room for words. */
+/** The mark for where data goes. */
 internal val DataGoes.mark: String
     get() = when (this) {
         is DataGoes.ToCompany -> "☁️"
         DataGoes.StaysHere -> "🔒"
         DataGoes.Unknown -> "❔"
     }
+
+/**
+ * [text] after where data goes, as a mark on a colored disc so it shows on any background: blue for sent
+ * away, green for staying here, gray for not known. The one way the console shows it, wherever it does.
+ */
+@Composable
+internal fun DataGoesLine(goes: DataGoes, text: String) {
+    val palette = LocalPalette.current
+    val disc = when (goes) {
+        is DataGoes.ToCompany -> palette.accent
+        DataGoes.StaysHere -> palette.local
+        DataGoes.Unknown -> palette.line
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Box(Modifier.size(16.dp).clip(CircleShape).background(disc), contentAlignment = Alignment.Center) {
+            Text(goes.mark, fontSize = 8.sp, lineHeight = 8.sp)
+        }
+        Text(text, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
 
 /** Where data goes, in words a newcomer can act on. Says only what is known. */
 internal val DataGoes.words: String
@@ -452,12 +471,7 @@ private fun Composer(state: LibraryState, id: String) {
         }
         // Read again as the chat moves on, since the model in use is only known once it answers.
         val goes = remember(id, status) { state.dataGoes(id) }
-        Text(
-            "${goes.mark} ${goes.words}",
-            color = palette.muted,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(start = 26.dp, end = 16.dp, top = 5.dp, bottom = 9.dp),
-        )
+        Box(Modifier.padding(start = 24.dp, end = 16.dp, top = 5.dp, bottom = 9.dp)) { DataGoesLine(goes, goes.words) }
     }
 }
 

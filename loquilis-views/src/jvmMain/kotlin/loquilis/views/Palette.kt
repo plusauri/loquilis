@@ -22,6 +22,8 @@ data class Palette(
     val userInk: Color,
     val agentBubble: Color,
     val agentInk: Color,
+    /** Behind the mark for data that stays on this computer. Data sent away sits on [accent]. */
+    val local: Color,
 )
 
 private val Light = Palette(
@@ -37,6 +39,7 @@ private val Light = Palette(
     userInk = Color(0xFFFFFFFF),
     agentBubble = Color(0xFFE9E9EB),
     agentInk = Color(0xFF1C1C1E),
+    local = Color(0xFFD6F0DC),
 )
 
 private val Dark = Palette(
@@ -52,6 +55,7 @@ private val Dark = Palette(
     userInk = Color(0xFFFFFFFF),
     agentBubble = Color(0xFF3A3A3C),
     agentInk = Color(0xFFF2F2F7),
+    local = Color(0xFF1F4A2B),
 )
 
 val LocalPalette = staticCompositionLocalOf { Light }

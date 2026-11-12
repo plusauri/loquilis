@@ -85,7 +85,7 @@ class LibraryWindowTest {
         waitUntil(timeoutMillis = 5_000) { state.current!!.pager.conversation.title == "Tell me about plovers" }
         assertEquals(1, state.current!!.pager.turnCount)
         showing("Tell me about plovers")
-        showing("☁️ Sent to Anthropic")
+        showing("Sent to Anthropic")
         shot("chat")
         state.close()
     }
