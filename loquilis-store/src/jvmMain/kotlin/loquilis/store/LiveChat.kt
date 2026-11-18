@@ -135,7 +135,7 @@ class LocalChatAgent(private val store: Store, private val baseUrl: String = "ht
      * Plain chat has no tools, so nothing else can send it on.
      */
     override fun dataGoes(conversation: Conversation?): DataGoes {
-        val model = listOfNotNull(conversation?.agent?.reported_model, conversation?.agent?.model).firstOrNull(String::isNotEmpty)
+        val model = conversation?.modelInUse
         return when {
             !isLoopback(baseUrl) -> DataGoes.Unknown
             model != null && isCloudModel(model) -> DataGoes.ToCompany("Ollama")
@@ -150,7 +150,7 @@ class LocalChatAgent(private val store: Store, private val baseUrl: String = "ht
         HttpChatSession(
             parser,
             baseUrl,
-            model = listOfNotNull(conversation.agent?.reported_model, conversation.agent?.model).firstOrNull(String::isNotEmpty),
+            model = conversation.modelInUse,
             workspace = conversation.workspace_path,
             history = historyOf(conversation.id),
             firstRawSeq = firstRawSeq,
@@ -341,3 +341,7 @@ class LiveChat(
         const val TITLE_LENGTH = 60
     }
 }
+
+/** The model [this] conversation uses: the one its agent reported, or else the one chosen when it began. */
+val Conversation.modelInUse: String?
+    get() = listOfNotNull(agent?.reported_model, agent?.model).firstOrNull(String::isNotEmpty)

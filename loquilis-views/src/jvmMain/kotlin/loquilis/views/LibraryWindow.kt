@@ -72,6 +72,7 @@ import loquilis.model.Conversation
 import loquilis.model.Decision
 import loquilis.store.ChatStatus
 import loquilis.store.DataGoes
+import loquilis.store.modelInUse
 
 /** How often a growing conversation is read again. */
 private const val REFRESH_MILLIS = 100L
@@ -351,6 +352,7 @@ private fun agentLabel(cli: String) = cli.replaceFirstChar(Char::uppercase)
 private fun place(conversation: Conversation) = listOf(
     conversation.workspace_path.substringAfterLast('/'),
     agentLabel(conversation.agent?.cli.orEmpty()),
+    conversation.modelInUse.orEmpty(),
 ).filter { it.isNotEmpty() }.joinToString(" · ")
 
 /** The agent's oldest question, with what it wants to do spelled out and every answer one click away. */
@@ -501,7 +503,8 @@ private fun Composer(state: LibraryState, id: String) {
         }
         // Read again as the chat moves on, since the model in use is only known once it answers.
         val goes = remember(id, status) { state.dataGoes(id) }
-        Box(Modifier.padding(start = 24.dp, end = 16.dp, top = 5.dp, bottom = 9.dp)) { DataGoesLine(goes, goes.words) }
+        val line = remember(id, status) { state.goesLine(id) }
+        Box(Modifier.padding(start = 24.dp, end = 16.dp, top = 5.dp, bottom = 9.dp)) { DataGoesLine(goes, line) }
     }
 }
 

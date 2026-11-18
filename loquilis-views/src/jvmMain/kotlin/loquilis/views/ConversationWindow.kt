@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import loquilis.store.modelInUse
 
 /**
  * One conversation from a library: three views of it, and the inspector showing the selected entry.
@@ -78,7 +79,7 @@ private fun TopBar(state: ConversationState) {
 private fun summaryLine(pager: ConversationPager): String = buildList {
     val conversation = pager.conversation
     conversation.agent?.let { agent ->
-        add(agent.reported_model.ifBlank { "unknown model" })
+        add(conversation.modelInUse ?: "unknown model")
         if (agent.cli_version.isNotBlank()) add("${agent.cli} ${agent.cli_version}".trim())
     }
     add(plural(pager.turnCount, "turn", "turns"))

@@ -13,6 +13,7 @@ import loquilis.model.Conversation
 import loquilis.store.Agent
 import loquilis.store.DataGoes
 import loquilis.store.LiveChat
+import loquilis.store.modelInUse
 import loquilis.store.Store
 import loquilis.store.newConversation
 
@@ -62,7 +63,7 @@ class LibraryState(
     /** The model [agent]'s latest conversation used, so it can be offered first. */
     private fun lastModel(agent: String): String? = conversations
         .filter { it.agent?.cli == agent }
-        .firstNotNullOfOrNull { conversation -> listOfNotNull(conversation.agent?.reported_model, conversation.agent?.model).firstOrNull(String::isNotEmpty) }
+        .firstNotNullOfOrNull { it.modelInUse }
 
     /** The conversation waiting on the user to confirm its deletion. */
     var deleting by mutableStateOf<Conversation?>(null)
@@ -82,6 +83,10 @@ class LibraryState(
 
     /** Where what is written in [conversationId] goes, as its agent can tell from what it uses. */
     fun dataGoes(conversationId: String): DataGoes = agentOf(conversationId).dataGoes(store.conversation(conversationId))
+
+    /** What [conversationId] says beside where its data goes: the model, once one is known. */
+    fun goesLine(conversationId: String): String =
+        listOfNotNull(dataGoes(conversationId).words, store.conversation(conversationId)?.modelInUse).joinToString(" · ")
 
     fun select(conversationId: String) {
         val showing = current

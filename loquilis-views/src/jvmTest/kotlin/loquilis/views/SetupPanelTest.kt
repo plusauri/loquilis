@@ -97,7 +97,7 @@ class SetupPanelTest {
         waitUntil(timeoutMillis = 10_000) { state.conversations.size == 1 }
         assertEquals(null, state.setup)
         assertEquals("gemma3:4b", state.conversations.single().agent?.model, "the downloaded model is the one used")
-        showing("Stays on this computer")
+        showing("Stays on this computer · gemma3:4b")
         state.close()
     }
 
