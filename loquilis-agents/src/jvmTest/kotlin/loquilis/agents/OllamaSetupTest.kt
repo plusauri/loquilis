@@ -76,7 +76,8 @@ class OllamaSetupTest {
 
     @Test fun theRecommendationLeavesMostMemoryToEverythingElse() {
         val names = { gb: Double -> OllamaSetup.recommend(OllamaSetup.catalog, gb).name }
-        assertEquals("gemma3:1b", names(8.6))
+        assertEquals("gemma3:1b", names(6.0))
+        assertEquals("gemma3:4b", names(8.6), "an 8 GB Mac, at the measured 2.9 GB")
         assertEquals("gemma3:4b", names(17.2))
         assertEquals("gemma4:e2b", names(25.8))
         assertEquals("gemma3:1b", names(2.0), "the smallest when none fits")
