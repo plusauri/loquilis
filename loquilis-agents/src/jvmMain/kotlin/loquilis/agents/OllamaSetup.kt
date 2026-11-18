@@ -174,7 +174,8 @@ class OllamaSetup(
         /** Disk free where Ollama keeps models, under the home folder. */
         fun freeDiskGb(): Double = File(System.getProperty("user.home")).usableSpace / GB
 
-        private const val SHARE = 0.35
+        // A third: at 0.35 an 8 GB Mac (8.6 GB as Java reads it) just took gemma3:4b at 2.9 GB, leaving too little.
+        private const val SHARE = 0.33
         private const val GB = 1_000_000_000.0
     }
 }

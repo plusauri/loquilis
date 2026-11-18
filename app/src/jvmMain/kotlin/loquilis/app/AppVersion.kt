@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 13
-    const val LAST_CHANGE = "OpenCode on a local model"
+    private const val PATCH = 14
+    const val LAST_CHANGE = "An 8 GB Mac is recommended the smallest model"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 
