@@ -15,6 +15,7 @@ import java.awt.Taskbar
 import java.awt.image.BufferedImage
 import java.nio.file.Path
 import javax.imageio.ImageIO
+import java.util.prefs.Preferences
 import loquilis.agents.OllamaSetup
 import loquilis.store.ClaudeAgent
 import loquilis.store.GrokAgent
@@ -33,11 +34,14 @@ fun main(args: Array<String>) {
     val icon = readAppIcon()
     showInDock(icon)
     val library = openArgument(args.firstOrNull())
+    val settings = Preferences.userRoot().node("loquilis")
     val state = LibraryState(
         library.store,
         mapOf("claude" to ClaudeAgent(), "grok" to GrokAgent(), "local" to LocalChatAgent(library.store)),
         library.conversationId,
         setups = mapOf("local" to OllamaSetup()),
+        offlineOnly = settings.getBoolean(OFFLINE_ONLY, false),
+        onOfflineOnly = { settings.putBoolean(OFFLINE_ONLY, it) },
     )
     // A hook, not a finally: application() ends the process itself when the window closes.
     Runtime.getRuntime().addShutdownHook(
@@ -83,3 +87,5 @@ private fun showInDock(icon: BufferedImage) {
     val taskbar = Taskbar.getTaskbar()
     if (taskbar.isSupported(Taskbar.Feature.ICON_IMAGE)) taskbar.iconImage = icon
 }
+
+private const val OFFLINE_ONLY = "offline_only"

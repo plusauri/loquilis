@@ -16,6 +16,8 @@ import loquilis.store.LiveChat
 import loquilis.store.modelInUse
 import loquilis.store.Store
 import loquilis.store.newConversation
+import loquilis.store.OfflineOnly
+import loquilis.store.joinedNetworks
 
 /**
  * A library in a window: its conversations, the one showing, and the chats running. A chat keeps
@@ -28,9 +30,35 @@ class LibraryState(
     private val now: () -> Instant = { java.time.Instant.now() },
     /** What an agent needs set up first, such as a runner and a model, by agent name. */
     private val setups: Map<String, OllamaSetup> = emptyMap(),
+    /** Whether offline only starts on, and where a change to it is kept. */
+    offlineOnly: Boolean = false,
+    private val onOfflineOnly: (Boolean) -> Unit = {},
+    /** The networks this computer is joined to, read before every send while offline only is on. */
+    private val networks: () -> List<String> = ::joinedNetworks,
 ) {
     constructor(store: Store, agent: Agent, first: String? = null, now: () -> Instant = { java.time.Instant.now() }) :
         this(store, mapOf(DEFAULT_AGENT to agent), first, now)
+
+    /** Offline only: nothing is sent while this computer is on a network, nor anywhere but this computer. */
+    var offlineOnly by mutableStateOf(offlineOnly)
+        private set
+
+    fun changeOfflineOnly(on: Boolean) {
+        offlineOnly = on
+        onOfflineOnly(on)
+    }
+
+    /** The networks joined when last looked, for showing. A send looks again. */
+    var joined by mutableStateOf<List<String>>(emptyList())
+        private set
+
+    suspend fun lookAtNetworks() {
+        joined = withContext(Dispatchers.IO) { networks() }
+    }
+
+    /** Why a message in [conversationId] cannot be sent now, or null when it can. */
+    fun refusal(conversationId: String): String? =
+        if (!offlineOnly) null else OfflineOnly.refusal(dataGoes(conversationId), networks().also { joined = it })
 
     /** The agents a new conversation can start with, by their command-line tool's name. */
     val agentNames: List<String> get() = agents.keys.toList()
@@ -54,7 +82,7 @@ class LibraryState(
      */
     suspend fun prepare(agent: String): Boolean {
         val needed = setups[agent] ?: return true
-        val shown = SetupState(agent, needed, lastUsed = lastModel(agent))
+        val shown = SetupState(agent, needed, lastUsed = lastModel(agent), offlineOnly = offlineOnly)
         setup = shown
         shown.refresh()
         return false
@@ -126,11 +154,14 @@ class LibraryState(
     }
 
     /** Sends [text] on the conversation showing, and keeps the view on the answer. */
-    fun send(text: String) {
-        val showing = current ?: return
+    /** Sends [text] in the conversation showing, or says why it cannot go. */
+    fun send(text: String): String? {
+        val showing = current ?: return null
+        refusal(showing.pager.conversationId)?.let { return it }
         showing.following = true
         chat(showing.pager.conversationId).send(text)
         refreshList()
+        return null
     }
 
     fun refreshList() {

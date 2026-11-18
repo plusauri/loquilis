@@ -47,6 +47,8 @@ class SetupState(
     val freeDiskGb: () -> Double = OllamaSetup::freeDiskGb,
     /** The model this agent's latest conversation used, offered first. */
     private val lastUsed: String? = null,
+    /** Offline only is on, so nothing is downloaded and no site is opened. */
+    val offlineOnly: Boolean = false,
 ) {
     var runner by mutableStateOf<RunnerState?>(null)
         private set
@@ -134,14 +136,16 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onStart: (model:
         when (runner) {
             null -> Note("Checking this computer…")
             RunnerState.NotInstalled ->
-                Note("A model runs inside Ollama, a free app. Get it from Ollama's own site and install it like any other app, then open it once. This card notices when it is ready.")
+                Note(if (setup.offlineOnly) "A model runs inside Ollama, a free app, which is not on this computer yet. Getting it needs the internet: turn off Offline only first." else "A model runs inside Ollama, a free app. Get it from Ollama's own site and install it like any other app, then open it once. This card notices when it is ready.")
             RunnerState.NotRunning -> Note("Ollama is installed but not running. Starting it opens the Ollama app, and this card notices when it is ready.")
             RunnerState.NoModels, is RunnerState.Ready -> {
                 setup.installed.forEachIndexed { index, name ->
                     InstalledChoice(name, setup.models.firstOrNull { it.name == name }, first = index == 0, enabled = setup.pulling == null) { onStart(name) }
                 }
                 val offered = setup.offered
-                if (offered.isNotEmpty()) {
+                if (offered.isNotEmpty() && setup.offlineOnly) {
+                    Note("Downloading a model needs the internet. Turn off Offline only to download one.")
+                } else if (offered.isNotEmpty()) {
                     Note(
                         if (ready) "Or download another. It is yours to keep."
                         else "Ollama is ready. Choose a model to download. It is yours to keep, and later conversations start at once.",
@@ -164,7 +168,7 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onStart: (model:
             } else {
                 ComposerButton("Close", palette.line, palette.ink, onClick = onClose)
                 when (runner) {
-                    RunnerState.NotInstalled -> ComposerButton("Get Ollama", palette.accent, palette.userInk) { openInBrowser(OllamaSetup.DOWNLOAD_PAGE) }
+                    RunnerState.NotInstalled -> if (!setup.offlineOnly) ComposerButton("Get Ollama", palette.accent, palette.userInk) { openInBrowser(OllamaSetup.DOWNLOAD_PAGE) }
                     RunnerState.NotRunning -> ComposerButton("Start Ollama", palette.accent, palette.userInk) { setup.start() }
                     else -> {}
                 }

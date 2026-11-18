@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 11
-    const val LAST_CHANGE = "Free a local model two minutes after it answers, and on quit"
+    private const val PATCH = 12
+    const val LAST_CHANGE = "Offline only"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 

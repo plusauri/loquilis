@@ -25,8 +25,10 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import loquilis.model.Conversation
 import loquilis.store.Agent
 import loquilis.store.ClaudeAgent
+import loquilis.store.DataGoes
 import loquilis.store.SqliteStore
 import loquilis.store.Store
 
@@ -358,6 +360,47 @@ class LibraryWindowTest {
         waitUntil(timeoutMillis = 5_000) { store.lastSeq(first) >= 3 }
         state.select(first)
         showing("Done.")
+        state.close()
+    }
+
+    @Test fun offlineOnlyHoldsAMessageWhileOnANetworkAndSendsItOnceOff() = runDesktopComposeUiTest(1100, 700) {
+        var networks = listOf("en0")
+        val local = object : Agent by answers {
+            override fun dataGoes(conversation: Conversation?) = DataGoes.StaysHere
+        }
+        val state = LibraryState(store, mapOf("claude" to local), offlineOnly = true, networks = { networks })
+        setContent { ReviewTheme { LibraryWindow(state) { _, _ -> state.newConversation(dir) } } }
+        onNodeWithText("New conversation").performClick()
+        waitForIdle()
+        showing("On a network (en0). Nothing is sent until it is off.")
+        write("Tell me about plovers")
+        onNodeWithText("Send").performClick()
+
+        showing("Offline only is on, and this computer is on a network (en0). Turn off Wi-Fi and unplug network cables, then send.")
+        assertEquals("Tell me about plovers", state.drafts[state.currentId], "the message stays typed")
+        assertEquals(0, state.current!!.pager.turnCount)
+        shot("offline-refused")
+
+        networks = emptyList()
+        onNodeWithText("Send").performClick()
+        showing("Plovers are shorebirds.")
+        showing("Off the network. Local models only.")
+        showing("Stays on this computer · m · offline only")
+        state.close()
+    }
+
+    @Test fun offlineOnlyNeverSendsToACompanyAndIsKept() = runDesktopComposeUiTest(1100, 700) {
+        val kept = mutableListOf<Boolean>()
+        val state = LibraryState(store, mapOf("claude" to answers), onOfflineOnly = { kept += it }, networks = { emptyList() })
+        setContent { ReviewTheme { LibraryWindow(state) { _, _ -> state.newConversation(dir) } } }
+        onNodeWithText("Offline only").performClick()
+        onNodeWithText("New conversation").performClick()
+        waitForIdle()
+        write("Tell me about plovers")
+        onNodeWithText("Send").performClick()
+
+        showing("Offline only is on, and this conversation is sent to Anthropic.")
+        assertEquals(listOf(true), kept)
         state.close()
     }
 }

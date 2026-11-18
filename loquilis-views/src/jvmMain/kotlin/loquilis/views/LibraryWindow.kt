@@ -40,6 +40,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
@@ -223,6 +225,7 @@ private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversati
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.fillMaxWidth().clickable { onNewConversation(agent) }.padding(horizontal = 14.dp, vertical = 12.dp),
         )
+        OfflineOnlySwitch(state)
         Box(Modifier.fillMaxWidth().weight(1f)) {
             val list = rememberLazyListState()
             LazyColumn(Modifier.fillMaxSize(), state = list) {
@@ -436,10 +439,12 @@ private fun Composer(state: LibraryState, id: String) {
     val asks by chat.asks.collectAsState()
     val text = state.drafts[id].orEmpty()
     val canSend = text.isNotBlank()
+    // Why the last message could not go. It stays typed, for once it can.
+    var refused by remember { mutableStateOf<String?>(null) }
     fun send() {
         if (!canSend) return
-        state.drafts.remove(id)
-        state.send(text)
+        refused = state.send(text)
+        if (refused == null) state.drafts.remove(id)
     }
 
     LaunchedEffect(status) {
@@ -455,6 +460,9 @@ private fun Composer(state: LibraryState, id: String) {
                 value = Instant.now()
                 delay(CLOCK_MILLIS)
             }
+        }
+        refused?.let { line ->
+            Text(line, color = palette.failed, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
         }
         statusLine(status, now)?.let { line ->
             Text(
@@ -503,7 +511,7 @@ private fun Composer(state: LibraryState, id: String) {
         }
         // Read again as the chat moves on, since the model in use is only known once it answers.
         val goes = remember(id, status) { state.dataGoes(id) }
-        val line = remember(id, status) { state.goesLine(id) }
+        val line = remember(id, status, state.offlineOnly) { state.goesLine(id) + if (state.offlineOnly) " · offline only" else "" }
         Box(Modifier.padding(start = 24.dp, end = 16.dp, top = 5.dp, bottom = 9.dp)) { DataGoesLine(goes, line) }
     }
 }
@@ -520,3 +528,44 @@ internal fun statusLine(status: ChatStatus, now: Instant): String? = when (statu
     }
     is ChatStatus.Failed -> status.reason
 }
+
+/**
+ * Turns offline only on and off, and while it is on says whether this computer is off the network, looking
+ * again every few seconds, so a person can see sending is possible before they write.
+ */
+@Composable
+private fun OfflineOnlySwitch(state: LibraryState) {
+    val palette = LocalPalette.current
+    val on = state.offlineOnly
+    LaunchedEffect(on) {
+        while (on) {
+            state.lookAtNetworks()
+            delay(NETWORK_LOOK_MILLIS)
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(
+            Modifier.clickable { state.changeOfflineOnly(!on) },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                Modifier.size(width = 28.dp, height = 16.dp).clip(RoundedCornerShape(8.dp)).background(if (on) palette.accent else palette.line).padding(2.dp),
+                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+            ) {
+                Box(Modifier.size(12.dp).clip(CircleShape).background(Color.White))
+            }
+            Text("Offline only", color = palette.ink, fontSize = 13.sp)
+        }
+        if (on) {
+            val joined = state.joined
+            if (joined.isEmpty()) {
+                DataGoesLine(DataGoes.StaysHere, "Off the network. Local models only.")
+            } else {
+                Text("On a network (${joined.joinToString()}). Nothing is sent until it is off.", color = palette.failed, fontSize = 11.sp, lineHeight = 15.sp)
+            }
+        }
+    }
+}
+
+private const val NETWORK_LOOK_MILLIS = 3_000L
