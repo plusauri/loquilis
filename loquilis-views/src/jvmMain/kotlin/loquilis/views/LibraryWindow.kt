@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -102,6 +103,7 @@ fun LibraryWindow(
                 val action = keys.actionFor(event)
                 when {
                     state.deleting != null && event.key == Key.Escape -> true.also { state.deleting = null }
+                    state.showingSettings && event.key == Key.Escape -> true.also { state.showingSettings = false }
                     state.setup != null && event.key == Key.Escape -> true.also { if (state.setup?.pulling == null) state.setup = null }
                     state.setup != null && event.key == Key.Enter -> true.also {
                         val setup = state.setup
@@ -127,6 +129,7 @@ fun LibraryWindow(
                 onNewConversation(setup.agent, model)
             }
         }
+        if (state.showingSettings) SettingsCard(state) { state.showingSettings = false }
         state.deleting?.let { conversation ->
             ConfirmDelete(conversation, onCancel = { state.deleting = null }) { scope.launch { state.confirmDelete() } }
         }
@@ -240,6 +243,13 @@ private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversati
             }
             VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
         }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(palette.line))
+        Text(
+            "Settings",
+            color = palette.muted,
+            fontSize = 13.sp,
+            modifier = Modifier.fillMaxWidth().clickable { state.showingSettings = true }.padding(horizontal = 14.dp, vertical = 10.dp),
+        )
     }
 }
 
@@ -351,7 +361,7 @@ internal val DataGoes.words: String
         DataGoes.Unknown -> "Not known where this goes"
     }
 
-private fun agentLabel(cli: String) = when (cli) {
+internal fun agentLabel(cli: String) = when (cli) {
     "opencode" -> "OpenCode"
     else -> cli.replaceFirstChar(Char::uppercase)
 }
@@ -539,7 +549,7 @@ internal fun statusLine(status: ChatStatus, now: Instant): String? = when (statu
  * again every few seconds, so a person can see sending is possible before they write.
  */
 @Composable
-private fun OfflineOnlySwitch(state: LibraryState) {
+internal fun OfflineOnlySwitch(state: LibraryState, modifier: Modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
     val palette = LocalPalette.current
     val on = state.offlineOnly
     LaunchedEffect(on) {
@@ -548,20 +558,8 @@ private fun OfflineOnlySwitch(state: LibraryState) {
             delay(NETWORK_LOOK_MILLIS)
         }
     }
-    Column(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Row(
-            Modifier.clickable { state.changeOfflineOnly(!on) },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Box(
-                Modifier.size(width = 28.dp, height = 16.dp).clip(RoundedCornerShape(8.dp)).background(if (on) palette.accent else palette.line).padding(2.dp),
-                contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
-            ) {
-                Box(Modifier.size(12.dp).clip(CircleShape).background(Color.White))
-            }
-            Text("Offline only", color = palette.ink, fontSize = 13.sp)
-        }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Toggle("Offline only", on) { state.changeOfflineOnly(it) }
         if (on) {
             val joined = state.joined
             if (joined.isEmpty()) {
@@ -574,3 +572,22 @@ private fun OfflineOnlySwitch(state: LibraryState) {
 }
 
 private const val NETWORK_LOOK_MILLIS = 3_000L
+
+/** A switch with its label beside it. Every on-or-off choice the console offers comes through here. */
+@Composable
+internal fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
+    val palette = LocalPalette.current
+    Row(
+        Modifier.clickable { onChange(!on) },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            Modifier.size(width = 28.dp, height = 16.dp).clip(RoundedCornerShape(8.dp)).background(if (on) palette.accent else palette.line).padding(2.dp),
+            contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
+        ) {
+            Box(Modifier.size(12.dp).clip(CircleShape).background(Color.White))
+        }
+        Text(label, color = palette.ink, fontSize = 13.sp)
+    }
+}

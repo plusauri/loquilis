@@ -2,6 +2,7 @@ package loquilis.app
 
 import loquilis.store.LocalChatAgent
 import loquilis.views.Brand
+import loquilis.views.ConsoleSettings
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
@@ -35,14 +36,20 @@ fun main(args: Array<String>) {
     val icon = readAppIcon()
     showInDock(icon)
     val library = openArgument(args.firstOrNull())
-    val settings = Preferences.userRoot().node("loquilis")
+    val kept = Preferences.userRoot().node("loquilis")
     val state = LibraryState(
         library.store,
-        mapOf("claude" to ClaudeAgent(), "grok" to GrokAgent(), "local" to LocalChatAgent(library.store), "opencode" to OpenCodeAgent()),
+        mapOf(
+            "claude" to ClaudeAgent(),
+            "grok" to GrokAgent(),
+            // Read at each message, so a change in settings applies to the next one.
+            "local" to LocalChatAgent(library.store, keepAlive = { "${readSettings(kept).keepModelMinutes}m" }),
+            "opencode" to OpenCodeAgent(),
+        ),
         library.conversationId,
         setups = mapOf("local" to OllamaSetup(), "opencode" to OllamaSetup()),
-        offlineOnly = settings.getBoolean(OFFLINE_ONLY, false),
-        onOfflineOnly = { settings.putBoolean(OFFLINE_ONLY, it) },
+        settings = readSettings(kept),
+        onSettings = { writeSettings(kept, it) },
     )
     // A hook, not a finally: application() ends the process itself when the window closes.
     Runtime.getRuntime().addShutdownHook(
@@ -89,4 +96,19 @@ private fun showInDock(icon: BufferedImage) {
     if (taskbar.isSupported(Taskbar.Feature.ICON_IMAGE)) taskbar.iconImage = icon
 }
 
+/** The console's settings as kept in this user's Java preferences, the place a desktop app keeps such things. */
+private fun readSettings(kept: Preferences) = ConsoleSettings(
+    offlineOnly = kept.getBoolean(OFFLINE_ONLY, false),
+    hiddenAgents = kept.get(HIDDEN_AGENTS, "").split(',').filter(String::isNotBlank).toSet(),
+    keepModelMinutes = kept.getInt(KEEP_MODEL_MINUTES, ConsoleSettings().keepModelMinutes),
+)
+
+private fun writeSettings(kept: Preferences, settings: ConsoleSettings) {
+    kept.putBoolean(OFFLINE_ONLY, settings.offlineOnly)
+    kept.put(HIDDEN_AGENTS, settings.hiddenAgents.sorted().joinToString(","))
+    kept.putInt(KEEP_MODEL_MINUTES, settings.keepModelMinutes)
+}
+
 private const val OFFLINE_ONLY = "offline_only"
+private const val HIDDEN_AGENTS = "hidden_agents"
+private const val KEEP_MODEL_MINUTES = "keep_model_minutes"

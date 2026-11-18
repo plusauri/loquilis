@@ -196,7 +196,7 @@ class LocalChatAgent(
      * How long the runner keeps a model in memory after it answers. Ollama keeps one five minutes, and a model
      * holds gigabytes, so less, but long enough that a reply read and answered does not wait for it to load again.
      */
-    private val keepAlive: String = "2m",
+    private val keepAlive: () -> String = { "2m" },
     private val unload: (baseUrl: String, model: String) -> Unit = ::unloadModel,
 ) : Agent {
     override val needsFolder = false
@@ -229,7 +229,7 @@ class LocalChatAgent(
             workspace = conversation.workspace_path,
             history = historyOf(conversation.id),
             firstRawSeq = firstRawSeq,
-            keepAlive = keepAlive,
+            keepAlive = keepAlive(),
         )
     }
 

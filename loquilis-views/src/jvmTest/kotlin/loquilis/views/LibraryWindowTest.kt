@@ -368,7 +368,7 @@ class LibraryWindowTest {
         val local = object : Agent by answers {
             override fun dataGoes(conversation: Conversation?) = DataGoes.StaysHere
         }
-        val state = LibraryState(store, mapOf("claude" to local), offlineOnly = true, networks = { networks })
+        val state = LibraryState(store, mapOf("claude" to local), settings = ConsoleSettings(offlineOnly = true), networks = { networks })
         setContent { ReviewTheme { LibraryWindow(state) { _, _ -> state.newConversation(dir) } } }
         onNodeWithText("New conversation").performClick()
         waitForIdle()
@@ -390,8 +390,8 @@ class LibraryWindowTest {
     }
 
     @Test fun offlineOnlyNeverSendsToACompanyAndIsKept() = runDesktopComposeUiTest(1100, 700) {
-        val kept = mutableListOf<Boolean>()
-        val state = LibraryState(store, mapOf("claude" to answers), onOfflineOnly = { kept += it }, networks = { emptyList() })
+        val kept = mutableListOf<ConsoleSettings>()
+        val state = LibraryState(store, mapOf("claude" to answers), onSettings = { kept += it }, networks = { emptyList() })
         setContent { ReviewTheme { LibraryWindow(state) { _, _ -> state.newConversation(dir) } } }
         onNodeWithText("Offline only").performClick()
         onNodeWithText("New conversation").performClick()
@@ -400,7 +400,7 @@ class LibraryWindowTest {
         onNodeWithText("Send").performClick()
 
         showing("Offline only is on, and this conversation is sent to Anthropic.")
-        assertEquals(listOf(true), kept)
+        assertEquals(listOf(true), kept.map { it.offlineOnly })
         state.close()
     }
 }

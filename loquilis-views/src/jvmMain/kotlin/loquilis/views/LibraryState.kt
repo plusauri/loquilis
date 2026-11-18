@@ -30,9 +30,9 @@ class LibraryState(
     private val now: () -> Instant = { java.time.Instant.now() },
     /** What an agent needs set up first, such as a runner and a model, by agent name. */
     private val setups: Map<String, OllamaSetup> = emptyMap(),
-    /** Whether offline only starts on, and where a change to it is kept. */
-    offlineOnly: Boolean = false,
-    private val onOfflineOnly: (Boolean) -> Unit = {},
+    /** The settings to start with, and where a change to them is kept. */
+    settings: ConsoleSettings = ConsoleSettings(),
+    private val onSettings: (ConsoleSettings) -> Unit = {},
     /** The networks this computer is joined to, read before every send while offline only is on. */
     private val networks: () -> List<String> = ::joinedNetworks,
 ) {
@@ -40,12 +40,29 @@ class LibraryState(
         this(store, mapOf(DEFAULT_AGENT to agent), first, now)
 
     /** Offline only: nothing is sent while this computer is on a network, nor anywhere but this computer. */
-    var offlineOnly by mutableStateOf(offlineOnly)
+    var settings by mutableStateOf(settings)
         private set
 
-    fun changeOfflineOnly(on: Boolean) {
-        offlineOnly = on
-        onOfflineOnly(on)
+    fun change(changed: ConsoleSettings) {
+        settings = changed
+        onSettings(changed)
+    }
+
+    /** Whether the settings card is showing. */
+    var showingSettings by mutableStateOf(false)
+
+    val offlineOnly: Boolean get() = settings.offlineOnly
+
+    fun changeOfflineOnly(on: Boolean) = change(settings.copy(offlineOnly = on))
+
+    /** Every agent this console can start, shown in the list or not. */
+    val allAgentNames: List<String> get() = agents.keys.toList()
+
+    /** Shows or hides [agent]'s new-conversation link. The last one shown stays, so a conversation can always start. */
+    fun showAgent(agent: String, shown: Boolean) {
+        val hidden = if (shown) settings.hiddenAgents - agent else settings.hiddenAgents + agent
+        if (agents.keys.all { it in hidden }) return
+        change(settings.copy(hiddenAgents = hidden))
     }
 
     /** The networks joined when last looked, for showing. A send looks again. */
@@ -61,7 +78,7 @@ class LibraryState(
         if (!offlineOnly) null else OfflineOnly.refusal(dataGoes(conversationId), networks().also { joined = it })
 
     /** The agents a new conversation can start with, by their command-line tool's name. */
-    val agentNames: List<String> get() = agents.keys.toList()
+    val agentNames: List<String> get() = agents.keys.filter { it !in settings.hiddenAgents }.ifEmpty { agents.keys.toList() }
 
     /** Whether a new conversation with [agent] needs a folder to work on. */
     fun needsFolder(agent: String): Boolean = agents[agent]?.needsFolder ?: true
@@ -153,7 +170,6 @@ class LibraryState(
         refreshList()
     }
 
-    /** Sends [text] on the conversation showing, and keeps the view on the answer. */
     /** Sends [text] in the conversation showing, or says why it cannot go. */
     fun send(text: String): String? {
         val showing = current ?: return null
