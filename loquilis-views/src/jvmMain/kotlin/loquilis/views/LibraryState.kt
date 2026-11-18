@@ -140,6 +140,7 @@ class LibraryState(
     /** Stops every agent and waits for what they produced to reach the disk. */
     fun close() {
         synchronized(chats) { chats.values.toList() }.forEach(LiveChat::stop)
+        agents.values.forEach(Agent::close)
     }
 
     private companion object {

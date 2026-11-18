@@ -54,8 +54,8 @@ class HttpChatSessionTest {
         }
     }
 
-    private fun session(model: String? = "m", history: List<ChatMessage> = emptyList(), base: String = url) =
-        HttpChatSession(OpenAiChatParser("c1", ContentFactory(blobs), idsInOrder()), base, model, "", history)
+    private fun session(model: String? = "m", history: List<ChatMessage> = emptyList(), base: String = url, keepAlive: String? = null) =
+        HttpChatSession(OpenAiChatParser("c1", ContentFactory(blobs), idsInOrder()), base, model, "", history, keepAlive = keepAlive)
 
     private fun collected(running: HttpChatSession): Pair<List<Entry>, List<SessionEvent>> {
         val events = runBlocking { withTimeout(10_000) { running.events.toList() } }
@@ -96,6 +96,29 @@ class HttpChatSessionTest {
 
         assertTrue(""""content":"Before"""" in requests[0] && """"content":"One"""" in requests[0], requests[0])
         assertTrue(""""content":"Second answer"""" in requests[1] && """"content":"Two"""" in requests[1], requests[1])
+    }
+
+    @Test fun theRunnerIsToldHowLongToKeepTheModel() {
+        replying(chunk("Hi"), "[DONE]")
+        val running = session(keepAlive = "2m")
+        running.send("Hi")
+        running.close()
+        collected(running)
+
+        assertTrue(""""keep_alive":"2m"""" in requests.single(), requests.single())
+    }
+
+    @Test fun unloadingAsksTheRunnerToLetGoNow() {
+        val asked = CopyOnWriteArrayList<String>()
+        server.createContext("/api/generate") { exchange ->
+            asked += exchange.requestBody.readBytes().decodeToString()
+            exchange.sendResponseHeaders(200, -1)
+            exchange.close()
+        }
+        unloadModel(url, "gemma3:4b")
+        unloadModel("http://127.0.0.1:9", "gemma3:4b")
+
+        assertEquals(listOf("""{"model":"gemma3:4b","keep_alive":0}"""), asked.toList())
     }
 
     @Test fun withNoModelTheRunnersFirstIsUsed() {

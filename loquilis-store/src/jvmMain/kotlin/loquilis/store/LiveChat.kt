@@ -4,6 +4,7 @@ import loquilis.agents.ChatMessage
 import loquilis.agents.HttpChatSession
 import loquilis.agents.isCloudModel
 import loquilis.agents.isLoopback
+import loquilis.agents.unloadModel
 import loquilis.agents.OpenAiChatParser
 import loquilis.model.TextRole
 import com.squareup.wire.Instant
@@ -57,6 +58,9 @@ interface Agent {
 
     /** Where what is written in [conversation] goes. Unknown unless the agent can say from what it uses. */
     fun dataGoes(conversation: Conversation?): DataGoes = DataGoes.Unknown
+
+    /** Lets go of what the agent holds beyond its sessions, such as a model in memory, as the console closes. */
+    fun close() {}
 }
 
 /**
@@ -127,8 +131,20 @@ class GrokAgent(private val command: List<String> = listOf("grok")) : Agent {
  * Plain chat with a model on a runner at [baseUrl], such as Ollama, with no agent and so no tools. Ollama
  * listens on this address by default. A runner keeps no conversation, so each one comes from [store].
  */
-class LocalChatAgent(private val store: Store, private val baseUrl: String = "http://localhost:11434") : Agent {
+class LocalChatAgent(
+    private val store: Store,
+    private val baseUrl: String = "http://localhost:11434",
+    /**
+     * How long the runner keeps a model in memory after it answers. Ollama keeps one five minutes, and a model
+     * holds gigabytes, so less, but long enough that a reply read and answered does not wait for it to load again.
+     */
+    private val keepAlive: String = "2m",
+    private val unload: (baseUrl: String, model: String) -> Unit = ::unloadModel,
+) : Agent {
     override val needsFolder = false
+
+    /** The conversations this agent has run, whose models it lets go of when the console closes. */
+    private val started = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     /**
      * On this computer when the runner is, and the model is not one the runner forwards to its maker's cloud.
@@ -146,15 +162,23 @@ class LocalChatAgent(private val store: Store, private val baseUrl: String = "ht
     override fun parser(conversationId: String, blobs: BlobSink, newId: () -> String): AgentParser =
         OpenAiChatParser(conversationId, ContentFactory(blobs), newId)
 
-    override fun start(conversation: Conversation, parser: AgentParser, firstRawSeq: Long): AgentSession =
-        HttpChatSession(
+    override fun start(conversation: Conversation, parser: AgentParser, firstRawSeq: Long): AgentSession {
+        started += conversation.id
+        return HttpChatSession(
             parser,
             baseUrl,
             model = conversation.modelInUse,
             workspace = conversation.workspace_path,
             history = historyOf(conversation.id),
             firstRawSeq = firstRawSeq,
+            keepAlive = keepAlive,
         )
+    }
+
+    /** Frees the memory of every model it used, at once, without waiting out [keepAlive]. */
+    override fun close() {
+        started.mapNotNull { store.conversation(it)?.modelInUse }.toSet().forEach { unload(baseUrl, it) }
+    }
 
     private fun historyOf(conversationId: String): List<ChatMessage> = buildList {
         store.forEachEntry(conversationId) { entry ->

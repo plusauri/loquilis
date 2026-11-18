@@ -44,6 +44,8 @@ class HttpChatSession(
     private val workspace: String,
     history: List<ChatMessage>,
     firstRawSeq: Long = 1,
+    /** How long the runner keeps the model in memory after a reply, as Ollama reads it (`"2m"`). Null leaves its own default. */
+    private val keepAlive: String? = null,
     private val now: () -> Instant = { java.time.Instant.now() },
     private val client: HttpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build(),
 ) : AgentSession {
@@ -161,6 +163,7 @@ class HttpChatSession(
     private fun post(chosen: String): CompletableFuture<HttpResponse<InputStream>> {
         val payload = buildJsonObject {
             put("model", chosen)
+            keepAlive?.let { put("keep_alive", it) }
             put("stream", true)
             putJsonObject("stream_options") { put("include_usage", true) }
             putJsonArray("messages") {
@@ -228,4 +231,21 @@ fun isCloudModel(model: String): Boolean {
 fun isLoopback(baseUrl: String): Boolean {
     val host = runCatching { URI.create(baseUrl).host }.getOrNull()?.removeSurrounding("[", "]") ?: return false
     return host == "localhost" || host == "::1" || host.startsWith("127.")
+}
+
+/**
+ * Asks the runner at [baseUrl] to let go of [model] now, freeing its memory, the way Ollama documents: an empty
+ * request with `keep_alive` 0. Best effort: a runner that is gone has nothing to free.
+ */
+fun unloadModel(baseUrl: String, model: String, client: HttpClient = HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(1)).build()) {
+    val body = buildJsonObject {
+        put("model", model)
+        put("keep_alive", 0)
+    }.toString()
+    val call = HttpRequest.newBuilder(URI.create("$baseUrl/api/generate"))
+        .timeout(java.time.Duration.ofSeconds(3))
+        .header("Content-Type", "application/json")
+        .POST(HttpRequest.BodyPublishers.ofString(body))
+        .build()
+    runCatching { client.send(call, HttpResponse.BodyHandlers.discarding()) }
 }
