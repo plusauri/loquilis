@@ -1,5 +1,5 @@
 {
-  "about": "Open models Loquilis offers to download into Ollama. Sizes are from ollama.com/library, checked 2026-11-12. memory_gb is what the model holds while it answers, measured where noted and otherwise the download plus about 1 GB.",
+  "about": "Open models Loquilis offers to download into Ollama. Sizes are from ollama.com/library, checked 2026-11-12; gemma3:4b measured with ollama ps 2026-11-18. memory_gb is what the model holds while it answers, measured where noted and otherwise the download plus about 1 GB.",
   "models": [
     {
       "name": "gemma3:1b",
@@ -14,8 +14,8 @@
       "label": "Gemma 3, small",
       "maker": "Google",
       "download_gb": 3.4,
-      "memory_gb": 4.4,
-      "good_for": "Good everyday answers without slowing the Mac."
+      "memory_gb": 2.9,
+      "good_for": "Good everyday answers without slowing the Mac. Measured at 2.3 to 2.9 GB while answering."
     },
     {
       "name": "gemma4:e2b",
