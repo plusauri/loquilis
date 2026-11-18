@@ -26,6 +26,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import loquilis.agents.OllamaSetup
 import loquilis.store.LocalChatAgent
+import loquilis.store.OpenCodeAgent
 import loquilis.store.SqliteStore
 import loquilis.store.Store
 import loquilis.store.newConversation
@@ -139,6 +140,26 @@ class SetupPanelTest {
         onRoot().performKeyInput { pressKey(Key.Enter) }
         waitUntil(timeoutMillis = 10_000) { state.conversations.size == 1 }
         assertEquals("gemma3:1b", state.conversations.single().agent?.model)
+        state.close()
+    }
+
+    @Test fun anAgentThatUsesToolsIsOfferedOnlyModelsThatCan() = runDesktopComposeUiTest(1100, 760) {
+        models = """[{"name":"gemma3:4b"},{"name":"gemma4:e2b"}]"""
+        server.createContext("/api/show") { exchange ->
+            val asked = exchange.requestBody.readBytes().decodeToString()
+            val bytes = (if ("gemma4" in asked) """{"capabilities":["completion","tools"]}""" else """{"capabilities":["completion"]}""").toByteArray()
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        val state = LibraryState(store, mapOf("opencode" to OpenCodeAgent(ollamaUrl = url)), setups = mapOf("opencode" to OllamaSetup(url, emptyList())))
+        setContent { ReviewTheme { LibraryWindow(state) { agent, model -> state.newConversation(dir, agent, model) } } }
+        onAllNodesWithText("New conversation")[0].performClick()
+        showing("only models that can use them are listed")
+        showing("Gemma 4, small")
+
+        assertEquals(listOf("gemma4:e2b"), state.setup!!.installed)
+        assertEquals(0, onAllNodesWithText("Gemma 3, small").fetchSemanticsNodes().size, "it cannot call tools")
+        shot("setup-tools")
         state.close()
     }
 }

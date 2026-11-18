@@ -19,6 +19,7 @@ import java.util.prefs.Preferences
 import loquilis.agents.OllamaSetup
 import loquilis.store.ClaudeAgent
 import loquilis.store.GrokAgent
+import loquilis.store.OpenCodeAgent
 import loquilis.views.LibraryState
 import loquilis.views.LibraryWindow
 import loquilis.views.ReviewTheme
@@ -37,9 +38,9 @@ fun main(args: Array<String>) {
     val settings = Preferences.userRoot().node("loquilis")
     val state = LibraryState(
         library.store,
-        mapOf("claude" to ClaudeAgent(), "grok" to GrokAgent(), "local" to LocalChatAgent(library.store)),
+        mapOf("claude" to ClaudeAgent(), "grok" to GrokAgent(), "local" to LocalChatAgent(library.store), "opencode" to OpenCodeAgent()),
         library.conversationId,
-        setups = mapOf("local" to OllamaSetup()),
+        setups = mapOf("local" to OllamaSetup(), "opencode" to OllamaSetup()),
         offlineOnly = settings.getBoolean(OFFLINE_ONLY, false),
         onOfflineOnly = { settings.putBoolean(OFFLINE_ONLY, it) },
     )

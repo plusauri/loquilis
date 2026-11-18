@@ -318,6 +318,7 @@ internal val DataGoes.mark: String
     get() = when (this) {
         is DataGoes.ToCompany -> "☁️"
         DataGoes.StaysHere -> "🔒"
+        DataGoes.ModelHere -> "🔧"
         DataGoes.Unknown -> "❔"
     }
 
@@ -330,7 +331,7 @@ internal fun DataGoesLine(goes: DataGoes, text: String) {
     val palette = LocalPalette.current
     val disc = when (goes) {
         is DataGoes.ToCompany -> palette.accent
-        DataGoes.StaysHere -> palette.local
+        DataGoes.StaysHere, DataGoes.ModelHere -> palette.local
         DataGoes.Unknown -> palette.line
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -346,10 +347,14 @@ internal val DataGoes.words: String
     get() = when (this) {
         is DataGoes.ToCompany -> "Sent to $company"
         DataGoes.StaysHere -> "Stays on this computer"
+        DataGoes.ModelHere -> "Model on this computer; its tools can reach the network"
         DataGoes.Unknown -> "Not known where this goes"
     }
 
-private fun agentLabel(cli: String) = cli.replaceFirstChar(Char::uppercase)
+private fun agentLabel(cli: String) = when (cli) {
+    "opencode" -> "OpenCode"
+    else -> cli.replaceFirstChar(Char::uppercase)
+}
 
 /** Where a conversation's agent worked, and which agent it was. */
 private fun place(conversation: Conversation) = listOf(

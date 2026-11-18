@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
@@ -37,6 +38,8 @@ data class CatalogModel(
     val downloadGb: Double,
     val memoryGb: Double,
     val goodFor: String,
+    /** Whether it can call tools, which an agent such as OpenCode needs. */
+    val tools: Boolean = false,
 )
 
 /** A download under way: [completed] of [total] bytes, summed over its parts, and what Ollama is doing. */
@@ -64,6 +67,18 @@ class OllamaSetup(
         val listed = (Json.parseToJsonElement(answer.body()) as? JsonObject)?.get("models") as? JsonArray
         val models = listed.orEmpty().mapNotNull { (it as? JsonObject)?.str("name") }.filterNot(::isCloudModel)
         return if (models.isEmpty()) RunnerState.NoModels else RunnerState.Ready(models)
+    }
+
+    /** Whether Ollama says [model] can call tools. Not knowing reads as no. */
+    fun canUseTools(model: String): Boolean {
+        val call = HttpRequest.newBuilder(URI.create("$baseUrl/api/show"))
+            .timeout(Duration.ofSeconds(3))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(buildJsonObject { put("model", model) }.toString()))
+            .build()
+        val answer = runCatching { client.send(call, HttpResponse.BodyHandlers.ofString()).body() }.getOrNull() ?: return false
+        val capabilities = runCatching { (Json.parseToJsonElement(answer) as? JsonObject)?.get("capabilities") as? JsonArray }.getOrNull()
+        return capabilities.orEmpty().any { (it as? JsonPrimitive)?.content == "tools" }
     }
 
     /** Opens the Ollama app, which starts its runner. Whether it worked shows in the next [check]. */
@@ -130,7 +145,15 @@ class OllamaSetup(
             ((Json.parseToJsonElement(text) as JsonObject)["models"] as JsonArray).map { item ->
                 val model = item as JsonObject
                 fun number(key: String) = (model[key] as JsonPrimitive).doubleOrNull ?: 0.0
-                CatalogModel(model.str("name")!!, model.str("label")!!, model.str("maker").orEmpty(), number("download_gb"), number("memory_gb"), model.str("good_for").orEmpty())
+                CatalogModel(
+                    model.str("name")!!,
+                    model.str("label")!!,
+                    model.str("maker").orEmpty(),
+                    number("download_gb"),
+                    number("memory_gb"),
+                    model.str("good_for").orEmpty(),
+                    tools = (model["tools"] as? JsonPrimitive)?.booleanOrNull ?: false,
+                )
             }
 
         /**
@@ -139,6 +162,9 @@ class OllamaSetup(
          */
         fun recommend(models: List<CatalogModel>, memoryGb: Double = installedMemoryGb()): CatalogModel =
             models.filter { it.memoryGb <= memoryGb * SHARE }.maxByOrNull { it.memoryGb } ?: models.minBy { it.memoryGb }
+
+        /** Whether [model] leaves most of [memoryGb] to everything else, as [recommend] wants. */
+        fun suits(model: CatalogModel, memoryGb: Double): Boolean = model.memoryGb <= memoryGb * SHARE
 
         fun installedMemoryGb(): Double {
             val bean = ManagementFactory.getOperatingSystemMXBean() as? com.sun.management.OperatingSystemMXBean

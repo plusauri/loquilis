@@ -25,6 +25,8 @@ class NetworkTest {
         assertTrue("not known" in OfflineOnly.refusal(DataGoes.Unknown, emptyList())!!)
         assertTrue("(en0, utun3)" in OfflineOnly.refusal(DataGoes.StaysHere, listOf("en0", "utun3"))!!)
         assertNull(OfflineOnly.refusal(DataGoes.StaysHere, emptyList()))
+        assertNull(OfflineOnly.refusal(DataGoes.ModelHere, emptyList()), "an agent's tools have no network to reach")
+        assertTrue("(en0)" in OfflineOnly.refusal(DataGoes.ModelHere, listOf("en0"))!!)
     }
 
     @Test fun thisComputerCanBeRead() {

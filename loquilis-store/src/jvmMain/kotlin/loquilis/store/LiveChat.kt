@@ -19,8 +19,9 @@ import loquilis.agents.AgentParser
 import loquilis.agents.AgentSession
 import loquilis.agents.ClaudeLiveSession
 import loquilis.agents.ClaudeStreamParser
-import loquilis.agents.GrokAcpParser
+import loquilis.agents.AcpParser
 import loquilis.agents.GrokLiveSession
+import loquilis.agents.OpenCodeLiveSession
 import loquilis.agents.ParseOutput
 import loquilis.agents.PermissionAsk
 import loquilis.agents.SessionEvent
@@ -59,6 +60,9 @@ interface Agent {
     /** Where what is written in [conversation] goes. Unknown unless the agent can say from what it uses. */
     fun dataGoes(conversation: Conversation?): DataGoes = DataGoes.Unknown
 
+    /** Whether its model has to call tools, which only some local models can. */
+    val modelNeedsTools: Boolean get() = false
+
     /** Lets go of what the agent holds beyond its sessions, such as a model in memory, as the console closes. */
     fun close() {}
 }
@@ -73,6 +77,12 @@ sealed interface DataGoes {
 
     /** To a runner on this computer, with no tools that could reach further. */
     data object StaysHere : DataGoes
+
+    /**
+     * To a model on this computer, through an agent whose tools (a shell, a web fetch) can reach the network
+     * when a person allows them. True of the model, not a promise about the tools.
+     */
+    data object ModelHere : DataGoes
 
     data object Unknown : DataGoes
 }
@@ -114,7 +124,7 @@ class GrokAgent(private val command: List<String> = listOf("grok")) : Agent {
     override fun dataGoes(conversation: Conversation?): DataGoes = DataGoes.ToCompany("xAI")
 
     override fun parser(conversationId: String, blobs: BlobSink, newId: () -> String): AgentParser =
-        GrokAcpParser(conversationId, ContentFactory(blobs), newId)
+        AcpParser(conversationId, ContentFactory(blobs), newId)
 
     override fun start(conversation: Conversation, parser: AgentParser, firstRawSeq: Long): AgentSession =
         GrokLiveSession(
@@ -125,6 +135,54 @@ class GrokAgent(private val command: List<String> = listOf("grok")) : Agent {
             firstRawSeq = firstRawSeq,
             command = command,
         )
+}
+
+/**
+ * OpenCode, an open agent, on a model in Ollama on this computer. A conversation names the Ollama model it chose
+ * (`gemma4:e2b`), and OpenCode reports it back with its provider (`ollama/gemma4:e2b`).
+ */
+class OpenCodeAgent(
+    private val command: List<String> = listOf("opencode"),
+    private val ollamaUrl: String = "http://localhost:11434",
+    private val unload: (baseUrl: String, model: String) -> Unit = ::unloadModel,
+) : Agent {
+    override val modelNeedsTools = true
+
+    private val used = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    override fun dataGoes(conversation: Conversation?): DataGoes {
+        val model = conversation?.modelInUse ?: return DataGoes.Unknown
+        val local = ollamaModel(model)
+        return if (local != null && !isCloudModel(local) && isLoopback(ollamaUrl)) DataGoes.ModelHere else DataGoes.Unknown
+    }
+
+    override fun parser(conversationId: String, blobs: BlobSink, newId: () -> String): AgentParser =
+        AcpParser(conversationId, ContentFactory(blobs), newId, adapter = "opencode-acp")
+
+    override fun start(conversation: Conversation, parser: AgentParser, firstRawSeq: Long): AgentSession {
+        val model = conversation.modelInUse?.let { if ('/' in it) it else "ollama/$it" }
+        model?.let(::ollamaModel)?.let(used::add)
+        return OpenCodeLiveSession(
+            parser,
+            File(conversation.workspace_path),
+            model = model,
+            resume = conversation.agent?.agent_session_id?.ifEmpty { null },
+            firstRawSeq = firstRawSeq,
+            command = command,
+        )
+    }
+
+    /** OpenCode leaves the model to Ollama, which would hold it five minutes after Loquilis closes. */
+    override fun close() {
+        used.forEach { unload(ollamaUrl, it) }
+    }
+
+    /** The Ollama model in [model], with or without OpenCode's `ollama/`, or null for another provider's. */
+    private fun ollamaModel(model: String): String? = when {
+        model.startsWith("ollama/") -> model.removePrefix("ollama/")
+        '/' in model -> null
+        else -> model
+    }
 }
 
 /**

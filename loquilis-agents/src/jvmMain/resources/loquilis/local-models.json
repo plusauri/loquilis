@@ -23,7 +23,8 @@
       "maker": "Google",
       "download_gb": 7.5,
       "memory_gb": 7.4,
-      "good_for": "Newer and better answers. Measured at 7.4 GB while answering."
+      "good_for": "Newer and better answers, and it can use tools, so it works with OpenCode. Measured at 7.4 GB while answering.",
+      "tools": true
     }
   ]
 }

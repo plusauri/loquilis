@@ -34,4 +34,13 @@ class DataGoesTest {
     @Test fun aRunnerElsewhereIsUnknown() {
         assertEquals(DataGoes.Unknown, local("http://192.168.1.20:11434").dataGoes(using("gemma4:e2b")))
     }
+
+    @Test fun openCodeOnALocalModelSaysTheModelIsHereButNotItsTools() {
+        assertEquals(DataGoes.ModelHere, OpenCodeAgent().dataGoes(using("ollama/gemma4:e2b")))
+        assertEquals(DataGoes.ModelHere, OpenCodeAgent().dataGoes(using("gemma4:e2b")), "as chosen, before OpenCode reports it")
+        assertEquals(DataGoes.Unknown, OpenCodeAgent().dataGoes(using("ollama/gpt-oss:120b-cloud")))
+        assertEquals(DataGoes.Unknown, OpenCodeAgent().dataGoes(using("opencode/big-pickle")))
+        assertEquals(DataGoes.Unknown, OpenCodeAgent().dataGoes(null))
+        assertEquals(DataGoes.Unknown, OpenCodeAgent(ollamaUrl = "http://192.168.1.20:11434").dataGoes(using("ollama/gemma4:e2b")))
+    }
 }

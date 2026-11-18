@@ -80,6 +80,8 @@ class ProcessSession(
     workingDir: File,
     firstRawSeq: Long = 1,
     private val now: () -> Instant = { java.time.Instant.now() },
+    /** Set for the agent on top of what Loquilis itself was started with. */
+    environment: Map<String, String> = emptyMap(),
 ) : AgentSession {
     private val channel = Channel<SessionEvent>(Channel.UNLIMITED)
     private val lock = Any()
@@ -90,7 +92,7 @@ class ProcessSession(
     private var turnRunning = false
     private var closing = false
 
-    private val process: Process = ProcessBuilder(commandLine).directory(workingDir).start()
+    private val process: Process = ProcessBuilder(commandLine).directory(workingDir).apply { environment().putAll(environment) }.start()
 
     private val stdin: BufferedWriter = process.outputStream.bufferedWriter()
 

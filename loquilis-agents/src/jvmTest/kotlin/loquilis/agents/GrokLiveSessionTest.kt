@@ -46,7 +46,7 @@ class GrokLiveSessionTest {
     )
 
     private fun session(command: List<String>, resume: String? = null, model: String? = null): GrokLiveSession {
-        val parser = GrokAcpParser("c1", ContentFactory(MemoryBlobs()), idsInOrder())
+        val parser = AcpParser("c1", ContentFactory(MemoryBlobs()), idsInOrder())
         return GrokLiveSession(parser, dir, model = model, resume = resume, command = command)
     }
 
@@ -69,7 +69,7 @@ class GrokLiveSessionTest {
         assertTrue(""""method":"session/new"""" in sent[1])
         assertTrue(""""yoloMode":false""" in sent[1])
         assertTrue(""""sessionId":"s1"""" in sent[2] && "First" in sent[2])
-        assertTrue(""""id":4""" in sent[3] && "Second" in sent[3])
+        assertTrue(""""id":5""" in sent[3] && "Second" in sent[3], "3 is kept for setting a model")
     }
 
     @Test fun theAgentIsStartedInItsStdioForm() {

@@ -82,7 +82,7 @@ class LibraryState(
      */
     suspend fun prepare(agent: String): Boolean {
         val needed = setups[agent] ?: return true
-        val shown = SetupState(agent, needed, lastUsed = lastModel(agent), offlineOnly = offlineOnly)
+        val shown = SetupState(agent, needed, lastUsed = lastModel(agent), offlineOnly = offlineOnly, toolsOnly = agents[agent]?.modelNeedsTools == true)
         setup = shown
         shown.refresh()
         return false

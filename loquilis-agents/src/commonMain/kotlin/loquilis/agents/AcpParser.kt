@@ -31,8 +31,8 @@ import loquilis.model.UserMessage
 import loquilis.model.Visibility
 
 /**
- * Reads `grok agent stdio`, which speaks the Agent Client Protocol: JSON-RPC, one message per line.
- * Read from Grok 1.0.70.
+ * Reads an agent that speaks the Agent Client Protocol: JSON-RPC, one message per line. Read from Grok 1.0.70
+ * (`grok agent stdio`) and OpenCode 2.3.2 (`opencode acp`), whose differences are noted where they fall.
  *
  * - `session/update` carries the turn. Text and thinking come in small chunks, each its own raw line,
  *   so a run of chunks becomes one entry covering all their raw lines. It is written when the run ends.
@@ -45,13 +45,14 @@ import loquilis.model.Visibility
  * - `session/request_permission` asks whether a call may run, and is answered with a JSON-RPC response.
  * - Everything else (the `_x.ai` methods, `available_commands_update`) stays in the raw log and makes no entry.
  */
-class GrokAcpParser(
+class AcpParser(
     conversationId: String,
     private val contents: ContentFactory,
     newId: () -> String = Ulid::next,
+    /** Which agent this reads, as stored with its conversations: `grok-acp`, `opencode-acp`. */
+    override val adapter: String = "grok-acp",
 ) : AgentParser {
-    override val adapter = "grok-acp"
-    override val version = 1
+    override val version = 2
 
     private class Run(val thinking: Boolean, val first: Long, val at: Instant) {
         val text = StringBuilder()
@@ -64,6 +65,8 @@ class GrokAcpParser(
     private var lastAt: Instant? = null
     private val callsById = mutableMapOf<String, Entry>()
     private val textSinceLastTool = mutableListOf<Entry>()
+    private var agentVersion = ""
+    private var session: SessionInfo? = null
 
     override fun userMessage(text: String, at: Instant): List<ParseOutput> {
         lastAt = at
@@ -88,6 +91,8 @@ class GrokAcpParser(
             message.str("method") != null -> emptyList()
             result?.str("stopReason") != null -> turnEnded(result, at, raw)
             result?.str("sessionId") != null -> sessionStarted(result)
+            result?.get("configOptions") != null -> modelChosen(result)
+            result?.get("agentInfo") != null -> emptyList<ParseOutput>().also { agentVersion = (result["agentInfo"] as? JsonObject)?.str("version").orEmpty() }
             message["error"] != null -> failed(message["error"] as? JsonObject, at, raw)
             else -> emptyList()
         }
@@ -109,7 +114,7 @@ class GrokAcpParser(
         "agent_message_chunk" -> chunk(update, thinking = false, rawSeq, at)
         "agent_thought_chunk" -> chunk(update, thinking = true, rawSeq, at)
         "tool_call" -> endRun() + toolCall(update, at, raw)
-        "tool_call_update" -> toolCallUpdate(update, at, raw)
+        "tool_call_update" -> inputArrived(update) + toolCallUpdate(update, at, raw)
         else -> emptyList()
     }
 
@@ -144,8 +149,8 @@ class GrokAcpParser(
         val command = input.str("command")
         val call = ToolCall(
             call_id = update.str("toolCallId").orEmpty(),
-            tool = tool?.str("name") ?: update.str("title").orEmpty(),
-            kind = kindOf(tool?.str("kind")),
+            tool = tool?.str("name") ?: update.str("name") ?: update.str("title").orEmpty(),
+            kind = kindOf(tool?.str("kind") ?: update.str("kind")),
             input = if (command != null) contents.text(command) else contents.text(input.toString(), "application/json"),
             target_path = pathOf(input).orEmpty(),
             description = input.str("description").orEmpty(),
@@ -162,7 +167,8 @@ class GrokAcpParser(
         val callId = update.str("toolCallId").orEmpty()
         val call = callsById.remove(callId) ?: return emptyList()
         val output = update["rawOutput"] as? JsonObject
-        val isError = status == "failed" || ((output?.long("exit_code") ?: 0L) != 0L)
+        val exit = output?.long("exit_code") ?: (output?.get("metadata") as? JsonObject)?.long("exit") ?: 0L
+        val isError = status == "failed" || exit != 0L
         val result = ToolResult(
             call_id = callId,
             output = contents.text(outputOf(update, output)),
@@ -193,7 +199,7 @@ class GrokAcpParser(
         val input = call["rawInput"] as? JsonObject ?: JsonObject(emptyMap())
         val options = (params["options"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>()
         fun optionOf(kind: String) = options.firstOrNull { it.str("kind") == kind }
-        val tool = toolInfo(call)?.str("label") ?: call.str("title").orEmpty()
+        val tool = toolInfo(call)?.str("label") ?: call.str("name") ?: call.str("title").orEmpty()
         val description = input.str("description") ?: call.str("title").orEmpty()
         val detail = (input.str("command") ?: pathOf(input) ?: input.toString()).take(ASK_DETAIL_LENGTH)
         val always = optionOf("allow_always")
@@ -235,17 +241,48 @@ class GrokAcpParser(
 
     private fun sessionStarted(result: JsonObject): List<ParseOutput> {
         val info = SessionInfo(
-            cliVersion = "",
-            model = (result["models"] as? JsonObject)?.str("currentModelId").orEmpty(),
+            cliVersion = agentVersion,
+            model = (result["models"] as? JsonObject)?.str("currentModelId") ?: modelOption(result).orEmpty(),
             sessionId = result.str("sessionId").orEmpty(),
             workspacePath = (result["_meta"] as? JsonObject)?.str("currentWorkingDirectory").orEmpty(),
         )
+        session = info
         return listOf(ParseOutput.Session(info))
+    }
+
+    /** OpenCode names its model as a config option, and says which it uses once the console sets it. */
+    private fun modelChosen(result: JsonObject): List<ParseOutput> {
+        val started = session ?: return emptyList()
+        val model = modelOption(result) ?: return emptyList()
+        return listOf(ParseOutput.Session(started.copy(model = model).also { session = it }))
+    }
+
+    /**
+     * OpenCode sends a call's input only once it runs, in its first update, so the call is filled in then.
+     * Grok sends it with the call, and this changes nothing.
+     */
+    private fun inputArrived(update: JsonObject): List<ParseOutput> {
+        val input = update["rawInput"] as? JsonObject ?: return emptyList()
+        val callId = update.str("toolCallId") ?: return emptyList()
+        val entry = callsById[callId] ?: return emptyList()
+        val call = entry.body?.tool_call ?: return emptyList()
+        if (input.isEmpty() || call.target_path.isNotEmpty() || call.description.isNotEmpty()) return emptyList()
+        val command = input.str("command")
+        val filled = call.copy(
+            input = if (command != null) contents.text(command) else contents.text(input.toString(), "application/json"),
+            target_path = pathOf(input).orEmpty(),
+            description = input.str("description").orEmpty(),
+        )
+        if (filled == call) return emptyList()
+        val updated = entry.copy(body = EntryBody(tool_call = filled))
+        callsById[callId] = updated
+        return listOf(ParseOutput.Update(updated))
     }
 
     private fun turnEnded(result: JsonObject, at: Instant, raw: RawRange): List<ParseOutput> {
         val reason = result.str("stopReason")
-        val usage = ((result["_meta"] as? JsonObject)?.get("usage") as? JsonObject)
+        // Grok puts what the turn used under `_meta`, OpenCode beside the stop reason.
+        val usage = ((result["_meta"] as? JsonObject)?.get("usage") as? JsonObject) ?: (result["usage"] as? JsonObject)
         val outputs = (endRun() + textSinceLastTool.map { ParseOutput.Update(asReply(it)) } + closeOpenCalls()).toMutableList()
         textSinceLastTool.clear()
         val state = when (reason) {
@@ -304,6 +341,9 @@ class GrokAcpParser(
         const val AGENT_ERROR = "error"
 
         fun toolInfo(update: JsonObject): JsonObject? = (update["_meta"] as? JsonObject)?.get("x.ai/tool") as? JsonObject
+
+        fun modelOption(result: JsonObject): String? = (result["configOptions"] as? JsonArray).orEmpty()
+            .filterIsInstance<JsonObject>().firstOrNull { it.str("id") == "model" }?.str("currentValue")
 
         fun pathOf(input: JsonObject): String? = input.str("file_path") ?: input.str("target_file") ?: input.str("path")
 

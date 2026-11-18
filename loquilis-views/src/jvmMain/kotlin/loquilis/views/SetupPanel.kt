@@ -49,6 +49,8 @@ class SetupState(
     private val lastUsed: String? = null,
     /** Offline only is on, so nothing is downloaded and no site is opened. */
     val offlineOnly: Boolean = false,
+    /** The agent calls tools, so only models that can are offered. */
+    val toolsOnly: Boolean = false,
 ) {
     var runner by mutableStateOf<RunnerState?>(null)
         private set
@@ -59,24 +61,35 @@ class SetupState(
     var problem by mutableStateOf<String?>(null)
         private set
 
-    /** The model suggested for this computer, listed first. */
-    val recommended: CatalogModel get() = OllamaSetup.recommend(models, memoryGb)
+    private val usable: List<CatalogModel> get() = models.filter { !toolsOnly || it.tools }
 
-    /** The models on this computer, the one used last first. Empty until the runner is ready. */
+    /** The model suggested for this computer, listed first. */
+    val recommended: CatalogModel? get() = usable.takeIf { it.isNotEmpty() }?.let { OllamaSetup.recommend(it, memoryGb) }
+
+    /** Whether [model] leaves most of the memory to everything else. */
+    fun suits(model: CatalogModel): Boolean = OllamaSetup.suits(model, memoryGb)
+
+    /** The models on this computer that the agent can use, the one used last first. Empty until the runner is ready. */
     val installed: List<String>
-        get() = (runner as? RunnerState.Ready)?.models.orEmpty().sortedByDescending { it == lastUsed }
+        get() = (runner as? RunnerState.Ready)?.models.orEmpty().filter { !toolsOnly || it in withTools }.sortedByDescending { it == lastUsed }
 
     /** Catalog models not on this computer yet, the recommended one first. */
     val offered: List<CatalogModel>
         get() {
-            val here = installed.toSet()
-            return (listOf(recommended) + (models - recommended)).filter { it.name !in here }
+            val here = (runner as? RunnerState.Ready)?.models.orEmpty().toSet()
+            return (listOfNotNull(recommended) + (usable - setOfNotNull(recommended))).filter { it.name !in here }
         }
+
+    private var withTools by mutableStateOf<Set<String>>(emptySet())
 
     private var download: Job? = null
 
     suspend fun refresh() {
-        runner = withContext(Dispatchers.IO) { setup.check() }
+        val checked = withContext(Dispatchers.IO) { setup.check() }
+        if (toolsOnly && checked is RunnerState.Ready) {
+            withTools = withContext(Dispatchers.IO) { checked.models.filter(setup::canUseTools).toSet() }
+        }
+        runner = checked
     }
 
     fun start() = setup.start()
@@ -130,15 +143,17 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onStart: (model:
     }
 
     Modal(onDismiss = { if (setup.pulling == null) onClose() }, width = 460.dp) {
-        val ready = runner is RunnerState.Ready
+        val ready = runner is RunnerState.Ready && setup.installed.isNotEmpty()
         Text(if (ready) "Choose a model" else "Set up a model on this computer", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        DataGoesLine(DataGoes.StaysHere, "What you write here stays on this computer.")
+        if (setup.toolsOnly) DataGoesLine(DataGoes.ModelHere, "The model runs on this computer. Its tools reach the network only when you allow them.")
+        else DataGoesLine(DataGoes.StaysHere, "What you write here stays on this computer.")
         when (runner) {
             null -> Note("Checking this computer…")
             RunnerState.NotInstalled ->
                 Note(if (setup.offlineOnly) "A model runs inside Ollama, a free app, which is not on this computer yet. Getting it needs the internet: turn off Offline only first." else "A model runs inside Ollama, a free app. Get it from Ollama's own site and install it like any other app, then open it once. This card notices when it is ready.")
             RunnerState.NotRunning -> Note("Ollama is installed but not running. Starting it opens the Ollama app, and this card notices when it is ready.")
             RunnerState.NoModels, is RunnerState.Ready -> {
+                if (setup.toolsOnly) Note("This agent works through tools, so only models that can use them are listed.")
                 setup.installed.forEachIndexed { index, name ->
                     InstalledChoice(name, setup.models.firstOrNull { it.name == name }, first = index == 0, enabled = setup.pulling == null) { onStart(name) }
                 }
@@ -151,7 +166,7 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onStart: (model:
                         else "Ollama is ready. Choose a model to download. It is yours to keep, and later conversations start at once.",
                     )
                     offered.forEach { model ->
-                        ModelChoice(model, model == setup.recommended, setup, prominent = !ready) {
+                        ModelChoice(model, model == setup.recommended && setup.suits(model), setup, prominent = !ready) {
                             setup.track(scope.launch { if (setup.download(model)) onStart(model.name) })
                         }
                     }

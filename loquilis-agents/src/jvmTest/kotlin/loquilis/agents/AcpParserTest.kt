@@ -19,9 +19,9 @@ import loquilis.model.ToolKind
 import loquilis.model.Visibility
 
 /** Lines are hand-written to match what `grok agent stdio` sends. Read from Grok 1.0.70. */
-class GrokAcpParserTest {
+class AcpParserTest {
     private val blobs = MemoryBlobs()
-    private val parser = GrokAcpParser("c1", ContentFactory(blobs), idsInOrder())
+    private val parser = AcpParser("c1", ContentFactory(blobs), idsInOrder())
     private val log = EntryLog()
     private var rawSeq = 0L
 

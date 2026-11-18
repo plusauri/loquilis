@@ -38,7 +38,8 @@ class Recorder(private val store: Store, private val conversationId: String, pri
                             reported_model = output.info.model,
                             agent_session_id = output.info.sessionId,
                         ),
-                        workspace_path = output.info.workspacePath,
+                        // An agent that does not say where it works leaves the folder it was started in.
+                        workspace_path = output.info.workspacePath.ifEmpty { conversation.workspace_path },
                         parser = ParserRef(parser.adapter, parser.version),
                     ),
                 )

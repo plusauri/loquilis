@@ -28,8 +28,9 @@ fun reachesBeyond(addresses: List<InetAddress>): Boolean =
     addresses.any { !it.isLoopbackAddress && !it.isLinkLocalAddress }
 
 /**
- * Offline only: nothing is sent while this computer is on any network, and a conversation is sent only where it
- * stays on this computer. Checked again before every send, since a network can come up mid-conversation.
+ * Offline only: nothing is sent while this computer is on any network, and a conversation is sent only to a model
+ * on this computer, whose agent's tools then have no network to reach either. Checked again before every send,
+ * since a network can come up mid-conversation.
  */
 object OfflineOnly {
     /** Why [goes] cannot be sent now, with [networks] joined, or null when it can. */
