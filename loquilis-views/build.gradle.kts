@@ -6,6 +6,13 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+/**
+ * The ui-kit release this build uses (GitHub Packages, `plusauri/ui-kit`; settings.gradle.kts). Raising it is
+ * how a kit change reaches Loquilis: release the kit (a `v<version>` tag there), then change this line. A kit
+ * checkout included from source (`PLUSAURI_UI_KIT_DIR`) wins over it.
+ */
+val UI_KIT_VERSION = "0.1.0"
+
 kotlin {
     // Desktop only for now: the store's one implementation is JVM.
     jvm()
@@ -18,6 +25,7 @@ kotlin {
             api(compose.foundation)
             api(compose.material3)
             api(compose.ui)
+            api("com.plusauri:ui-kit:$UI_KIT_VERSION")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
             implementation("org.jetbrains:markdown:0.7.18")
