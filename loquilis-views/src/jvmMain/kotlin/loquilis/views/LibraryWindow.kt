@@ -7,6 +7,7 @@ import plusauri.ui.ActionPill
 import plusauri.ui.ActionPillDensity
 import plusauri.ui.HoverTooltip
 import plusauri.ui.LabeledSlideToggle
+import plusauri.ui.PanelSide
 import plusauri.ui.SlideToggleDefaults
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -102,6 +103,11 @@ fun LibraryWindow(
     onNewConversation: (agent: String, model: String) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    // Closes the new-conversation card and starts with [agent], through its setup when it has one.
+    val create: (String) -> Unit = { agent ->
+        state.choosingAgent = null
+        scope.launch { if (state.prepare(agent)) onNewConversation(agent, "") }
+    }
     val keyFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { keyFocus.requestFocus() }
     Box(
@@ -111,6 +117,8 @@ fun LibraryWindow(
                 val action = keys.actionFor(event)
                 when {
                     state.deleting != null && event.key == Key.Escape -> true.also { state.deleting = null }
+                    state.choosingAgent != null && event.key == Key.Escape -> true.also { state.choosingAgent = null }
+                    state.choosingAgent != null && event.key == Key.Enter -> true.also { create(state.choosingAgent!!) }
                     state.showingSettings && event.key == Key.Escape -> true.also { state.showingSettings = false }
                     state.setup != null && event.key == Key.Escape -> true.also { if (state.setup?.pulling == null) state.setup = null }
                     state.setup != null && event.key == Key.Enter -> true.also {
@@ -130,7 +138,9 @@ fun LibraryWindow(
             .focusable(),
     ) {
         val begin: (String) -> Unit = { agent -> scope.launch { if (state.prepare(agent)) onNewConversation(agent, "") } }
-        Library(state, brand, begin)
+        LaunchedEffect(state.newConversationAsked) { if (state.newConversationAsked > 0) state.startChoosing(begin) }
+        Library(state, brand) { state.startChoosing(begin) }
+        if (state.choosingAgent != null) NewConversationCard(state) { agent -> create(agent) }
         state.setup?.let { setup ->
             SetupPanel(setup, onClose = { state.setup = null }) { model ->
                 state.setup = null
@@ -196,11 +206,13 @@ private fun ConfirmDelete(conversation: Conversation, onCancel: () -> Unit, onDe
 }
 
 @Composable
-private fun Library(state: LibraryState, brand: Brand?, onNewConversation: (agent: String) -> Unit) {
+private fun Library(state: LibraryState, brand: Brand?, onNewConversation: () -> Unit) {
     val palette = LocalPalette.current
     Row(Modifier.fillMaxSize().background(palette.page)) {
-        ConversationList(state, brand, onNewConversation, Modifier.width(260.dp).fillMaxHeight().background(palette.panel))
-        Box(Modifier.width(1.dp).fillMaxHeight().background(palette.line))
+        if (state.listPanel.shown) {
+            ConversationList(state, brand, onNewConversation, Modifier.width(state.listPanel.width).fillMaxHeight().background(palette.panel))
+        }
+        PanelSeam(state.listPanel, PanelSide.Leading, "conversation list")
         val showing = state.current
         val id = state.currentId
         if (showing == null || id == null) {
@@ -209,7 +221,7 @@ private fun Library(state: LibraryState, brand: Brand?, onNewConversation: (agen
             }
         } else {
             key(id) { Follow(state, showing, id) }
-            ConversationWindow(showing) { key(id) { Composer(state, id) } }
+            ConversationWindow(showing, state.inspectorPanel) { key(id) { Composer(state, id) } }
         }
     }
 }
@@ -232,17 +244,17 @@ private fun Follow(state: LibraryState, showing: ConversationState, id: String) 
 }
 
 @Composable
-private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversation: (agent: String) -> Unit, modifier: Modifier) {
+private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversation: () -> Unit, modifier: Modifier) {
     val palette = LocalPalette.current
     Column(modifier) {
         brand?.let { BrandLine(it) }
-        Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (agent in state.agentNames) ActionPill(
-                if (state.agentNames.size == 1) NEW_CONVERSATION else "New ${agentLabel(agent)} conversation",
-                ActionKind.Add,
-                onClick = { onNewConversation(agent) },
-            )
-        }
+        // One button however many agents there are. With a choice to make it says so, and opens the card.
+        ActionPill(
+            if (state.agentNames.size == 1) NEW_CONVERSATION else "$NEW_CONVERSATION…",
+            ActionKind.Add,
+            onClick = onNewConversation,
+            modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 4.dp),
+        )
         OfflineOnlySwitch(state)
         Box(Modifier.fillMaxWidth().weight(1f)) {
             val list = rememberLazyListState()

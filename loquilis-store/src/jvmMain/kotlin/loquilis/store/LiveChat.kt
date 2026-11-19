@@ -57,6 +57,12 @@ interface Agent {
     /** Whether this one works on a folder of files, which the host then has to ask for. */
     val needsFolder: Boolean get() = true
 
+    /**
+     * What this agent is, in a sentence or two a newcomer can choose by, shown where a conversation is started.
+     * Each agent says it of itself, so a new one needs no change to the views.
+     */
+    val description: String get() = ""
+
     /** Where what is written in [conversation] goes. Unknown unless the agent can say from what it uses. */
     fun dataGoes(conversation: Conversation?): DataGoes = DataGoes.Unknown
 
@@ -93,6 +99,9 @@ class ClaudeAgent(
     private val command: List<String> = listOf("claude"),
     private val env: Map<String, String> = System.getenv(),
 ) : Agent {
+    override val description =
+        "Claude Code, Anthropic's coding agent. It works in a folder you choose: it reads and changes files there and runs commands, asking first when it needs to."
+
     /**
      * Anthropic, unless `claude` was pointed elsewhere: another address, or a cloud that resells the model.
      * Even pointed at this computer it may still report to Anthropic, so anything else is unknown.
@@ -121,6 +130,9 @@ class ClaudeAgent(
 
 /** `grok`, in its one-process-per-conversation form. A conversation carries on through its session id. */
 class GrokAgent(private val command: List<String> = listOf("grok")) : Agent {
+    override val description =
+        "Grok, xAI's coding agent, run from its own command line. It works in a folder you choose, reading and changing files there."
+
     override fun dataGoes(conversation: Conversation?): DataGoes = DataGoes.ToCompany("xAI")
 
     override fun parser(conversationId: String, blobs: BlobSink, newId: () -> String): AgentParser =
@@ -146,6 +158,9 @@ class OpenCodeAgent(
     private val ollamaUrl: String = "http://localhost:11434",
     private val unload: (baseUrl: String, model: String) -> Unit = ::unloadModel,
 ) : Agent {
+    override val description =
+        "OpenCode, an open-source coding agent, with a model that runs on this computer through Ollama. It works in a folder you choose, and its tools reach the network only when you allow them."
+
     override val modelNeedsTools = true
 
     private val used = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
@@ -199,6 +214,9 @@ class LocalChatAgent(
     private val keepAlive: () -> String = { "2m" },
     private val unload: (baseUrl: String, model: String) -> Unit = ::unloadModel,
 ) : Agent {
+    override val description =
+        "A plain chat with an open model that runs on this computer through Ollama. What you write stays here. It reads no files and runs no commands."
+
     override val needsFolder = false
 
     /** The conversations this agent has run, whose models it lets go of when the console closes. */

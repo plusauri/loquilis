@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 16
-    const val LAST_CHANGE = "Plusauri theme and ui-kit controls, as in Tutilis"
+    private const val PATCH = 17
+    const val LAST_CHANGE = "One New conversation button with a choice of agents; side panels fold and resize"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 

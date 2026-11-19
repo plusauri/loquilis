@@ -101,14 +101,26 @@ private fun readSettings(kept: Preferences) = ConsoleSettings(
     offlineOnly = kept.getBoolean(OFFLINE_ONLY, false),
     hiddenAgents = kept.get(HIDDEN_AGENTS, "").split(',').filter(String::isNotBlank).toSet(),
     keepModelMinutes = kept.getInt(KEEP_MODEL_MINUTES, ConsoleSettings().keepModelMinutes),
+    listShown = kept.getBoolean(LIST_SHOWN, true),
+    listWidth = kept.getInt(LIST_WIDTH, ConsoleSettings.LIST_WIDTH),
+    inspectorShown = kept.getBoolean(INSPECTOR_SHOWN, true),
+    inspectorWidth = kept.getInt(INSPECTOR_WIDTH, ConsoleSettings.INSPECTOR_WIDTH),
 )
 
 private fun writeSettings(kept: Preferences, settings: ConsoleSettings) {
     kept.putBoolean(OFFLINE_ONLY, settings.offlineOnly)
     kept.put(HIDDEN_AGENTS, settings.hiddenAgents.sorted().joinToString(","))
     kept.putInt(KEEP_MODEL_MINUTES, settings.keepModelMinutes)
+    kept.putBoolean(LIST_SHOWN, settings.listShown)
+    kept.putInt(LIST_WIDTH, settings.listWidth)
+    kept.putBoolean(INSPECTOR_SHOWN, settings.inspectorShown)
+    kept.putInt(INSPECTOR_WIDTH, settings.inspectorWidth)
 }
 
 private const val OFFLINE_ONLY = "offline_only"
 private const val HIDDEN_AGENTS = "hidden_agents"
 private const val KEEP_MODEL_MINUTES = "keep_model_minutes"
+private const val LIST_SHOWN = "list_shown"
+private const val LIST_WIDTH = "list_width"
+private const val INSPECTOR_SHOWN = "inspector_shown"
+private const val INSPECTOR_WIDTH = "inspector_width"

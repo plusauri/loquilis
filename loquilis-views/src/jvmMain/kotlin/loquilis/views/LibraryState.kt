@@ -1,5 +1,7 @@
 package loquilis.views
 
+import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
@@ -54,6 +56,35 @@ class LibraryState(
     val offlineOnly: Boolean get() = settings.offlineOnly
 
     fun changeOfflineOnly(on: Boolean) = change(settings.copy(offlineOnly = on))
+
+    /** The conversation list down the left. Its fold and width are kept with the settings. */
+    val listPanel = PanelState(settings.listShown, settings.listWidth.dp, LIST_MIN, LIST_MAX) {
+        change(this.settings.copy(listShown = it.shown, listWidth = it.width.value.roundToInt()))
+    }
+
+    /** The inspector down the right. Its fold and width are kept with the settings. */
+    val inspectorPanel = PanelState(settings.inspectorShown, settings.inspectorWidth.dp, INSPECTOR_MIN, INSPECTOR_MAX) {
+        change(this.settings.copy(inspectorShown = it.shown, inspectorWidth = it.width.value.roundToInt()))
+    }
+
+    /** The agent chosen in the new-conversation card while it shows, or null when it does not. */
+    var choosingAgent by mutableStateOf<String?>(null)
+
+    /**
+     * Opens the new-conversation card on the agent of the latest conversation, or the first. With one agent to
+     * choose from there is no choice, and [onOnly] is told it at once.
+     */
+    fun startChoosing(onOnly: (agent: String) -> Unit) {
+        val names = agentNames
+        if (names.size == 1) return onOnly(names.single())
+        choosingAgent = conversations.firstNotNullOfOrNull { c -> c.agent?.cli?.takeIf { it in names } } ?: names.first()
+    }
+
+    /** What [agent] says it is, for choosing between agents. */
+    fun describe(agent: String): String = agents[agent]?.description.orEmpty()
+
+    /** Where a new conversation with [agent] would send what is written in it. */
+    fun agentDataGoes(agent: String): DataGoes = agents[agent]?.dataGoes(null) ?: DataGoes.Unknown
 
     /** Every agent this console can start, shown in the list or not. */
     val allAgentNames: List<String> get() = agents.keys.toList()
@@ -110,6 +141,10 @@ class LibraryState(
         .filter { it.agent?.cli == agent }
         .firstNotNullOfOrNull { it.modelInUse }
 
+    /** Counts asks for a new conversation that came by action rather than by the button, for the window to answer. */
+    var newConversationAsked by mutableStateOf(0)
+        private set
+
     /** The conversation waiting on the user to confirm its deletion. */
     var deleting by mutableStateOf<Conversation?>(null)
 
@@ -149,6 +184,10 @@ class LibraryState(
     fun perform(action: ConsoleAction) {
         when (action) {
             ConsoleAction.DeleteConversation -> deleting = conversations.firstOrNull { it.id == currentId }
+            ConsoleAction.ToggleConversationList -> listPanel.toggle()
+            ConsoleAction.ToggleInspector -> inspectorPanel.toggle()
+            // Opening the card needs the host, which LibraryWindow brings; see newConversationAsked.
+            ConsoleAction.NewConversation -> newConversationAsked++
         }
     }
 

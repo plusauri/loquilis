@@ -3,6 +3,7 @@ package loquilis.views
 import plusauri.ui.ButtonData
 import plusauri.ui.ButtonImage
 import plusauri.ui.MultiButtonSelect
+import plusauri.ui.PanelSide
 import plusauri.ui.MultiButtonSelectDefaults
 import plusauri.ui.SelectionMark
 import plusauri.ui.ToggleButtonWidth
@@ -40,7 +41,11 @@ import loquilis.store.modelInUse
  * [composer] sits under the views that show the conversation, for a host that can talk to the agent.
  */
 @Composable
-fun ConversationWindow(state: ConversationState, composer: @Composable () -> Unit = {}) {
+fun ConversationWindow(
+    state: ConversationState,
+    inspector: PanelState = remember { PanelState(true, ConsoleSettings.INSPECTOR_WIDTH.dp, INSPECTOR_MIN, INSPECTOR_MAX) },
+    composer: @Composable () -> Unit = {},
+) {
     val palette = LocalPalette.current
     val conversationId = state.pager.conversationId
     val messagesList = remember(conversationId) { LazyListState() }
@@ -59,8 +64,8 @@ fun ConversationWindow(state: ConversationState, composer: @Composable () -> Uni
                 }
                 if (state.view != ConversationView.Search) composer()
             }
-            Box(Modifier.width(1.dp).fillMaxHeight().background(palette.line))
-            Inspector(state, Modifier.width(420.dp).fillMaxHeight().background(palette.panel))
+            PanelSeam(inspector, PanelSide.Trailing, "inspector")
+            if (inspector.shown) Inspector(state, Modifier.width(inspector.width).fillMaxHeight().background(palette.panel))
         }
     }
 }
