@@ -1,5 +1,13 @@
 package loquilis.views
 
+import plusauri.ui.ActionKind
+import plusauri.ui.FadingScrollColumn
+import plusauri.ui.bleedEnd
+import plusauri.ui.ActionPill
+import plusauri.ui.ActionPillDensity
+import plusauri.ui.HoverTooltip
+import plusauri.ui.LabeledSlideToggle
+import plusauri.ui.SlideToggleDefaults
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.TooltipArea
@@ -146,17 +154,24 @@ internal fun Modal(onDismiss: () -> Unit, width: Dp = 380.dp, content: @Composab
             .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
-        Column(
+        // The kit's scroll column, so a card taller than the window fades at the cut and shows a thumb.
+        Box(
             Modifier.width(width)
                 .padding(vertical = 24.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(palette.page)
-                .clickable(remember { MutableInteractionSource() }, indication = null) {}
-                .verticalScroll(rememberScrollState())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            content = content,
-        )
+                .clickable(remember { MutableInteractionSource() }, indication = null) {},
+        ) {
+            FadingScrollColumn(
+                // The thumb rides in the card's right margin, beside the content rather than over it.
+                Modifier.padding(20.dp).bleedEnd(14.dp),
+                fadeColor = palette.page,
+                scrollbar = true,
+                scrollbarGutter = 14.dp,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = content,
+            )
+        }
     }
 }
 
@@ -174,8 +189,8 @@ private fun ConfirmDelete(conversation: Conversation, onCancel: () -> Unit, onDe
             lineHeight = 18.sp,
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            ComposerButton("Cancel", palette.line, palette.ink, onClick = onCancel)
-            ComposerButton("Delete", palette.line, palette.failed, onClick = onDelete)
+            ActionPill("Cancel", ActionKind.Clear, onClick = onCancel)
+            ActionPill("Delete", ActionKind.Remove, onClick = onDelete, selected = true)
         }
     }
 }
@@ -221,13 +236,13 @@ private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversati
     val palette = LocalPalette.current
     Column(modifier) {
         brand?.let { BrandLine(it) }
-        for (agent in state.agentNames) Text(
-            if (state.agentNames.size == 1) NEW_CONVERSATION else "New ${agentLabel(agent)} conversation",
-            color = palette.accent,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.fillMaxWidth().clickable { onNewConversation(agent) }.padding(horizontal = 14.dp, vertical = 12.dp),
-        )
+        Column(Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            for (agent in state.agentNames) ActionPill(
+                if (state.agentNames.size == 1) NEW_CONVERSATION else "New ${agentLabel(agent)} conversation",
+                ActionKind.Add,
+                onClick = { onNewConversation(agent) },
+            )
+        }
         OfflineOnlySwitch(state)
         Box(Modifier.fillMaxWidth().weight(1f)) {
             val list = rememberLazyListState()
@@ -244,12 +259,7 @@ private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversati
             VerticalScrollbar(rememberScrollbarAdapter(list), Modifier.align(Alignment.CenterEnd).fillMaxHeight())
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(palette.line))
-        Text(
-            "Settings",
-            color = palette.muted,
-            fontSize = 13.sp,
-            modifier = Modifier.fillMaxWidth().clickable { state.showingSettings = true }.padding(horizontal = 14.dp, vertical = 10.dp),
-        )
+        ActionPill("Settings", ActionKind.Go, onClick = { state.showingSettings = true }, modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp))
     }
 }
 
@@ -258,15 +268,11 @@ private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversati
 @Composable
 private fun BrandLine(brand: Brand) {
     val palette = LocalPalette.current
-    TooltipArea(
+    HoverTooltip(
+        maxWidth = 360.dp,
+        placeBelow = true,
         tooltip = {
-            Column(
-                Modifier.clip(RoundedCornerShape(8.dp))
-                    .background(palette.page)
-                    .border(1.dp, palette.line, RoundedCornerShape(8.dp))
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 for ((label, value) in brand.about) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(label, color = palette.muted, fontSize = 12.sp, modifier = Modifier.width(84.dp))
@@ -275,7 +281,6 @@ private fun BrandLine(brand: Brand) {
                 }
             }
         },
-        delayMillis = 250,
     ) {
         Row(
             Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp),
@@ -313,12 +318,7 @@ private fun ConversationLine(
             }
         }
         if (selected) {
-            Text(
-                "Delete",
-                color = palette.muted,
-                fontSize = 11.sp,
-                modifier = Modifier.clickable(onClick = onDelete).padding(start = 6.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
-            )
+            ActionPill("Delete", ActionKind.Remove, onClick = onDelete, density = ActionPillDensity.Thin, modifier = Modifier.padding(start = 6.dp, end = 12.dp))
         }
     }
 }
@@ -400,24 +400,18 @@ private fun AskCard(ask: PermissionAsk, more: Int, onAnswer: (Decision) -> Unit)
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ComposerButton("Allow", palette.accent, palette.userInk) { onAnswer(Decision.DECISION_ALLOW_ONCE) }
-            ComposerButton("Deny", palette.line, palette.ink) { onAnswer(Decision.DECISION_DENY) }
+            ActionPill("Allow", ActionKind.Go, onClick = { onAnswer(Decision.DECISION_ALLOW_ONCE) }, selected = true)
+            ActionPill("Deny", ActionKind.Clear, onClick = { onAnswer(Decision.DECISION_DENY) })
         }
         ask.remember?.let { rule ->
-            Text(
-                "Always allow $rule in this folder",
-                color = palette.accent,
-                fontSize = 12.sp,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.clickable { onAnswer(Decision.DECISION_ALLOW_ALWAYS) }.padding(vertical = 2.dp),
-            )
+            ActionPill("Always allow $rule in this folder", ActionKind.Go, onClick = { onAnswer(Decision.DECISION_ALLOW_ALWAYS) })
         }
     }
 }
 
+/** Send and Stop: the chat's own buttons, bigger than the kit's pills because writing is what the window is for. */
 @Composable
-internal fun ComposerButton(
+private fun ComposerButton(
     label: String,
     background: Color,
     ink: Color,
@@ -573,21 +567,11 @@ internal fun OfflineOnlySwitch(state: LibraryState, modifier: Modifier = Modifie
 
 private const val NETWORK_LOOK_MILLIS = 3_000L
 
-/** A switch with its label beside it. Every on-or-off choice the console offers comes through here. */
+/**
+ * A setting that is on or off, as the kit's slide toggle with its label, the one Tutilis uses. Every on-or-off
+ * choice the console offers comes through here. Plain on and off, not good and bad, so not red and green.
+ */
 @Composable
 internal fun Toggle(label: String, on: Boolean, onChange: (Boolean) -> Unit) {
-    val palette = LocalPalette.current
-    Row(
-        Modifier.clickable { onChange(!on) },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(
-            Modifier.size(width = 28.dp, height = 16.dp).clip(RoundedCornerShape(8.dp)).background(if (on) palette.accent else palette.line).padding(2.dp),
-            contentAlignment = if (on) Alignment.CenterEnd else Alignment.CenterStart,
-        ) {
-            Box(Modifier.size(12.dp).clip(CircleShape).background(Color.White))
-        }
-        Text(label, color = palette.ink, fontSize = 13.sp)
-    }
+    LabeledSlideToggle(label, on, onChange, colors = SlideToggleDefaults.primaryColors())
 }

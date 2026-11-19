@@ -84,7 +84,7 @@ fun SearchView(state: ConversationState) {
                     }
                 },
             )
-            Segments(SearchScope.entries, state.scope, { it.label }) { state.scope = it }
+            PickOne(SearchScope.entries, state.scope, { it.label }) { state.scope = it }
         }
         Box(Modifier.fillMaxWidth().weight(1f)) {
             if (state.hits.isEmpty()) {

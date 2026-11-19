@@ -7,7 +7,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.Clipboard
+import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.NativeClipboard
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ComposeUiTest
@@ -50,6 +53,16 @@ class FakeClipboard : Clipboard {
     }
 
     override val nativeClipboard: NativeClipboard get() = error("not used")
+
+    /** The same clipboard by the older API, which the kit's copy button writes through. */
+    @Suppress("DEPRECATION")
+    val manager = object : ClipboardManager {
+        override fun setText(annotatedString: AnnotatedString) {
+            text = annotatedString.text
+        }
+
+        override fun getText(): AnnotatedString = AnnotatedString(text)
+    }
 }
 
 /** The two levels of copying: a dragged stretch of a bubble, and a whole item in the inspector. */
@@ -60,7 +73,7 @@ class CopyTest {
 
     private fun ComposeUiTest.open(clipboard: FakeClipboard): ConversationState {
         val state = ConversationState(store, Fixture.conversationId)
-        setContent { CompositionLocalProvider(LocalClipboard provides clipboard) { ReviewTheme { ConversationWindow(state) } } }
+        setContent { CompositionLocalProvider(LocalClipboard provides clipboard, LocalClipboardManager provides clipboard.manager) { ReviewTheme { ConversationWindow(state) } } }
         waitForIdle()
         return state
     }
@@ -110,7 +123,8 @@ class CopyTest {
         onNodeWithContentDescription("Copy text").performClick()
         waitUntil(timeoutMillis = 3_000) { clipboard.text.isNotEmpty() }
         assertEquals(store.text(reply.body!!.agent_text!!.text), clipboard.text)
-        showing("Copied")
+        // The button says it worked by turning into a check named "Copied" (the kit's copy words).
+        waitUntil(timeoutMillis = 3_000) { onAllNodesWithContentDescription("Copied").fetchSemanticsNodes().isNotEmpty() }
     }
 
     @Test fun theRawLinesCopyToo() = runDesktopComposeUiTest(1320, 880) {
@@ -121,9 +135,5 @@ class CopyTest {
         onNodeWithContentDescription("Copy raw lines").performScrollTo().performClick()
         waitUntil(timeoutMillis = 3_000) { clipboard.text.isNotEmpty() }
         assertTrue("\"type\"" in clipboard.text, clipboard.text.take(200))
-    }
-
-    private fun ComposeUiTest.showing(text: String) {
-        waitUntil(timeoutMillis = 3_000) { onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
     }
 }

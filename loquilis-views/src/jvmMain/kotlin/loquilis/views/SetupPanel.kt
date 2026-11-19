@@ -1,5 +1,7 @@
 package loquilis.views
 
+import plusauri.ui.ActionKind
+import plusauri.ui.ActionPill
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -179,12 +181,12 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onStart: (model:
         setup.problem?.let { Text(it, color = palette.failed, fontSize = 12.sp) }
         Buttons {
             if (setup.pulling != null) {
-                ComposerButton("Cancel download", palette.line, palette.ink) { setup.cancel() }
+                ActionPill("Cancel download", ActionKind.Clear, onClick = { setup.cancel() })
             } else {
-                ComposerButton("Close", palette.line, palette.ink, onClick = onClose)
+                ActionPill("Close", ActionKind.Clear, onClick = onClose)
                 when (runner) {
-                    RunnerState.NotInstalled -> if (!setup.offlineOnly) ComposerButton("Get Ollama", palette.accent, palette.userInk) { openInBrowser(OllamaSetup.DOWNLOAD_PAGE) }
-                    RunnerState.NotRunning -> ComposerButton("Start Ollama", palette.accent, palette.userInk) { setup.start() }
+                    RunnerState.NotInstalled -> if (!setup.offlineOnly) ActionPill("Get Ollama", ActionKind.Go, onClick = { openInBrowser(OllamaSetup.DOWNLOAD_PAGE) })
+                    RunnerState.NotRunning -> ActionPill("Start Ollama", ActionKind.Run, onClick = { setup.start() })
                     else -> {}
                 }
             }
@@ -211,7 +213,7 @@ private fun InstalledChoice(name: String, known: CatalogModel?, first: Boolean, 
                 fontSize = 11.sp,
             )
         }
-        if (enabled) ComposerButton("Start", if (first) palette.accent else palette.line, if (first) palette.userInk else palette.ink, onClick = onStart)
+        if (enabled) ActionPill("Start", ActionKind.Run, onClick = onStart, selected = first)
     }
 }
 
@@ -243,8 +245,7 @@ private fun ModelChoice(model: CatalogModel, recommended: Boolean, setup: SetupS
             pulling != null -> {}
             !roomy -> Text("Needs ${gb(model.downloadGb + DISK_SPARE_GB)} of free disk; this computer has ${gb(freeGb)}.", color = palette.failed, fontSize = 11.sp)
             else -> Buttons {
-                val lead = recommended && prominent
-                ComposerButton("Download", if (lead) palette.accent else palette.line, if (lead) palette.userInk else palette.ink, onClick = onDownload)
+                ActionPill("Download", ActionKind.Add, onClick = onDownload, selected = recommended && prominent)
             }
         }
     }

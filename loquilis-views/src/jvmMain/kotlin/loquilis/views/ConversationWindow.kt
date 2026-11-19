@@ -1,5 +1,13 @@
 package loquilis.views
 
+import plusauri.ui.ButtonData
+import plusauri.ui.ButtonImage
+import plusauri.ui.MultiButtonSelect
+import plusauri.ui.MultiButtonSelectDefaults
+import plusauri.ui.SelectionMark
+import plusauri.ui.ToggleButtonWidth
+import plusauri.ui.ToggleState
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -70,7 +78,7 @@ private fun TopBar(state: ConversationState) {
                 Text(summaryLine(state.pager), fontSize = 12.sp, color = palette.muted)
             }
             Spacer(Modifier.weight(1f))
-            Segments(ConversationView.entries, state.view, { it.label }, state::show)
+            PickOne(ConversationView.entries, state.view, { it.label }, state::show)
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(palette.line))
     }
@@ -89,25 +97,20 @@ private fun summaryLine(pager: ConversationPager): String = buildList {
     conversation.total_usage?.cost_micro_usd?.takeIf { it > 0 }?.let { add(money(it)) }
 }.joinToString(" · ")
 
-/** A row of mutually exclusive choices. */
+/**
+ * A row of mutually exclusive choices: the kit's house pick-one control (`MultiButtonSelect` in its compact
+ * toolbar form), the same one Tutilis uses, with a check on the choice that is on so color is not the only cue.
+ */
 @Composable
-internal fun <T> Segments(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
-    val palette = LocalPalette.current
-    Row(
-        Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, palette.line, RoundedCornerShape(8.dp)),
-        horizontalArrangement = Arrangement.spacedBy(0.dp),
-    ) {
-        options.forEach { option ->
-            val on = option == selected
-            Text(
-                label(option),
-                color = if (on) palette.userInk else palette.ink,
-                fontSize = 13.sp,
-                modifier = Modifier
-                    .background(if (on) palette.accent else palette.page)
-                    .clickable { onSelect(option) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-            )
-        }
-    }
+internal fun <T> PickOne(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
+    MultiButtonSelect(
+        buttonSelections = options.map { ButtonData(ButtonImage.Unicode(label(it))) to ToggleState.Deselected },
+        selectedIndex = options.indexOf(selected),
+        onSelectedIndexChange = { index -> options[index].takeIf { it != selected }?.let(onSelect) },
+        toolbarOnly = true,
+        buttonSize = MultiButtonSelectDefaults.CompactHeight,
+        widthMode = ToggleButtonWidth.Fit,
+        labelTextStyle = MaterialTheme.typography.labelSmall,
+        selectionMark = SelectionMark.CheckBox,
+    )
 }

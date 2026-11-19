@@ -1,5 +1,7 @@
 package loquilis.views
 
+import plusauri.ui.ActionKind
+import plusauri.ui.ActionPill
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,13 +35,13 @@ internal fun SettingsCard(state: LibraryState, onClose: () -> Unit) {
 
         Section("Local models")
         Text("Keep a model in memory after it answers", color = palette.ink, fontSize = 13.sp)
-        Segments(ConsoleSettings.KEEP_MINUTES, settings.keepModelMinutes, label = { "$it min" }) {
+        PickOne(ConsoleSettings.KEEP_MINUTES, settings.keepModelMinutes, label = { "$it min" }) {
             state.change(settings.copy(keepModelMinutes = it))
         }
         Hint("For Local conversations: longer answers the next message sooner, shorter gives the memory back sooner. OpenCode leaves its model to Ollama, which keeps it five minutes. Quitting frees both.")
 
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            ComposerButton("Close", palette.line, palette.ink, onClick = onClose)
+            ActionPill("Close", ActionKind.Clear, onClick = onClose)
         }
     }
 }

@@ -1,5 +1,6 @@
 package loquilis.views
 
+import plusauri.ui.CopyIconButton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -113,7 +114,7 @@ private fun Code(label: String, copyName: String, text: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(label, color = palette.muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
-            CopyButton(copyName, text)
+            CopyIconButton(textToCopy = { text }, contentDescription = copyName)
         }
         SelectionContainer {
             Text(shown(text), color = palette.ink, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = FontFamily.Monospace)
