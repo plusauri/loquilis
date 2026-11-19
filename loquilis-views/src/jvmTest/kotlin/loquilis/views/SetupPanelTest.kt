@@ -72,6 +72,14 @@ class SetupPanelTest {
         return state
     }
 
+    /** The one button opens the card, and Create starts the conversation with no name. */
+    private fun ComposeUiTest.startConversation() {
+        onNodeWithText("New conversation…").performClick()
+        waitForIdle()
+        onNodeWithText("Create").performClick()
+        waitForIdle()
+    }
+
     private fun ComposeUiTest.showing(text: String) {
         waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty() }
     }
@@ -83,7 +91,7 @@ class SetupPanelTest {
 
     @Test fun withNoModelTheCardOffersOneAndTheConversationStartsOnceItIsDownloaded() = runDesktopComposeUiTest(1100, 760) {
         val state = open(OllamaSetup(url, emptyList()))
-        onAllNodesWithText("New conversation")[0].performClick()
+        startConversation()
         showing("Suits this computer")
         assertEquals(0, state.conversations.size, "no conversation before a model is here")
         shot("setup-models")
@@ -104,7 +112,7 @@ class SetupPanelTest {
 
     @Test fun withNoOllamaTheCardSendsThePersonToItsSite() = runDesktopComposeUiTest(1100, 760) {
         val state = open(OllamaSetup("http://127.0.0.1:1", emptyList()))
-        onAllNodesWithText("New conversation")[0].performClick()
+        startConversation()
         showing("Get Ollama")
         shot("setup-install")
         onNodeWithText("Close").performClick()
@@ -116,7 +124,7 @@ class SetupPanelTest {
         models = """[{"name":"gemma3:1b"},{"name":"gemma3:4b"}]"""
         store.newConversation(dir, java.time.Instant.now(), cli = "local", model = "gemma3:4b")
         val state = open(OllamaSetup(url, emptyList()))
-        onAllNodesWithText("New conversation")[0].performClick()
+        startConversation()
         showing("Choose a model")
         showing("Or download another")
         shot("setup-choose")
@@ -130,12 +138,12 @@ class SetupPanelTest {
     @Test fun returnStartsWithTheFirstModelAndEscapeCloses() = runDesktopComposeUiTest(1100, 760) {
         models = """[{"name":"gemma3:1b"}]"""
         val state = open(OllamaSetup(url, emptyList()))
-        onAllNodesWithText("New conversation")[0].performClick()
+        startConversation()
         showing("Choose a model")
         onRoot().performKeyInput { pressKey(Key.Escape) }
         waitUntil(timeoutMillis = 5_000) { state.setup == null }
 
-        onAllNodesWithText("New conversation")[0].performClick()
+        startConversation()
         showing("Choose a model")
         onRoot().performKeyInput { pressKey(Key.Enter) }
         waitUntil(timeoutMillis = 10_000) { state.conversations.size == 1 }
@@ -153,7 +161,7 @@ class SetupPanelTest {
         }
         val state = LibraryState(store, mapOf("opencode" to OpenCodeAgent(ollamaUrl = url)), setups = mapOf("opencode" to OllamaSetup(url, emptyList())))
         setContent { ReviewTheme { LibraryWindow(state) { agent, model -> state.newConversation(dir, agent, model) } } }
-        onAllNodesWithText("New conversation")[0].performClick()
+        startConversation()
         showing("only models that can use them are listed")
         showing("Gemma 4, small")
 

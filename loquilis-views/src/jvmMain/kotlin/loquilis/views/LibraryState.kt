@@ -70,14 +70,24 @@ class LibraryState(
     /** The agent chosen in the new-conversation card while it shows, or null when it does not. */
     var choosingAgent by mutableStateOf<String?>(null)
 
-    /**
-     * Opens the new-conversation card on the agent of the latest conversation, or the first. With one agent to
-     * choose from there is no choice, and [onOnly] is told it at once.
-     */
-    fun startChoosing(onOnly: (agent: String) -> Unit) {
+    /** What is typed in the new-conversation card's Name box. Blank lets the first message name it. */
+    var newName by mutableStateOf("")
+
+    /** The name given at Create, held until the host has chosen a folder and [newConversation] runs. */
+    private var namedAtCreate = ""
+
+    /** Opens the new-conversation card, blank, on the agent of the latest conversation, or the first. */
+    fun startChoosing() {
         val names = agentNames
-        if (names.size == 1) return onOnly(names.single())
+        newName = ""
         choosingAgent = conversations.firstNotNullOfOrNull { c -> c.agent?.cli?.takeIf { it in names } } ?: names.first()
+    }
+
+    /** Closes the card and keeps its name for the conversation about to start. Returns the agent chosen. */
+    fun chosen(agent: String): String {
+        namedAtCreate = newName.trim()
+        choosingAgent = null
+        return agent
     }
 
     /** What [agent] says it is, for choosing between agents. */
@@ -175,7 +185,8 @@ class LibraryState(
 
     /** Starts a conversation for [agent] to work on in [workspace], and shows it. */
     fun newConversation(workspace: Path, agent: String = agentNames.first(), model: String = "") {
-        val conversation = store.newConversation(workspace, now(), cli = agent, model = model)
+        val title = namedAtCreate.also { namedAtCreate = "" }
+        val conversation = store.newConversation(workspace, now(), cli = agent, model = model, title = title)
         refreshList()
         select(conversation.id)
     }

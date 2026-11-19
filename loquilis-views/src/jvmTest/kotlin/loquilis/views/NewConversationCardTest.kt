@@ -7,7 +7,9 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -109,5 +111,26 @@ class NewConversationCardTest {
         waitForIdle()
         assertEquals(1, count("New conversation…"))
         assertEquals(true, kept.last().listShown && kept.last().inspectorShown)
+    }
+
+    @Test fun aNameGivenAtCreationIsKeptAndABlankOneWaitsForTheFirstMessage() = runDesktopComposeUiTest(1100, 760) {
+        val state = LibraryState(store, mapOf("claude" to ClaudeAgent(env = emptyMap()), "grok" to GrokAgent()), networks = { emptyList() })
+        setContent { ReviewTheme { LibraryWindow(state) { agent, model -> state.newConversation(dir, agent, model) } } }
+        waitForIdle()
+
+        onNodeWithText("New conversation…").performClick()
+        waitForIdle()
+        onNode(hasSetTextAction()).performTextInput("Plover notes")
+        shot("new-conversation-named")
+        onRoot().performKeyInput { pressKey(Key.Enter) }
+        waitForIdle()
+        assertEquals("Plover notes", store.conversation(state.currentId!!)!!.title)
+
+        onNodeWithText("New conversation…").performClick()
+        waitForIdle()
+        assertEquals("", state.newName, "the card opens blank")
+        onNodeWithText("Create").performClick()
+        waitForIdle()
+        assertEquals("", store.conversation(state.currentId!!)!!.title, "left for the first message to name")
     }
 }

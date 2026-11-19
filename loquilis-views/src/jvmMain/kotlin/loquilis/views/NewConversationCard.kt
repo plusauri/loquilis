@@ -14,6 +14,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import plusauri.ui.LabeledField
 import plusauri.ui.ActionKind
 import plusauri.ui.ActionPill
 import plusauri.ui.ButtonData
@@ -26,7 +39,7 @@ import plusauri.ui.ToggleState
 import plusauri.ui.ViewSide
 
 /**
- * Chooses the agent for a new conversation: the agents in a column on the left, the kit's pick-one control in its
+ * Starts a conversation: an optional name, then the agent for it: the agents in a column on the left, the kit's pick-one control in its
  * panel form, and what the chosen one is on the right, with where its data goes. The column grows as agents are
  * added, and each agent writes its own description, so a new one needs nothing here. Return creates, Escape and
  * Cancel close.
@@ -38,25 +51,63 @@ internal fun NewConversationCard(state: LibraryState, onCreate: (agent: String) 
     val chosen = state.choosingAgent?.takeIf { it in names } ?: names.first()
     Modal(onDismiss = { state.choosingAgent = null }, width = 560.dp) {
         Text("New conversation", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Text("Choose who to talk to.", color = palette.muted, fontSize = 13.sp)
-        MultiButtonSelect(
-            buttonSelections = names.map { ButtonData(ButtonImage.Unicode(agentLabel(it))) to ToggleState.Deselected },
-            contentMaker = { index -> AgentAbout(state, names[index]) },
-            buttonBarSide = ViewSide.Left,
-            selectedIndex = names.indexOf(chosen),
-            onSelectedIndexChange = { state.choosingAgent = names[it] },
-            buttonSize = MultiButtonSelectDefaults.CompactHeight,
-            widthMode = ToggleButtonWidth.Fit,
-            labelTextStyle = MaterialTheme.typography.labelMedium,
-            selectionMark = SelectionMark.CheckBox,
-            equalSlots = true,
-            fillPanelHeight = false,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        NameBox(state)
+        if (names.size == 1) {
+            // No choice to make, but still worth saying what the one agent is and where its data goes.
+            AgentAbout(state, chosen)
+        } else {
+            Text("Choose who to talk to.", color = palette.muted, fontSize = 13.sp)
+            MultiButtonSelect(
+                buttonSelections = names.map { ButtonData(ButtonImage.Unicode(agentLabel(it))) to ToggleState.Deselected },
+                contentMaker = { index -> AgentAbout(state, names[index]) },
+                buttonBarSide = ViewSide.Left,
+                selectedIndex = names.indexOf(chosen),
+                onSelectedIndexChange = { state.choosingAgent = names[it] },
+                buttonSize = MultiButtonSelectDefaults.CompactHeight,
+                widthMode = ToggleButtonWidth.Fit,
+                labelTextStyle = MaterialTheme.typography.labelMedium,
+                selectionMark = SelectionMark.CheckBox,
+                equalSlots = true,
+                fillPanelHeight = false,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             ActionPill("Cancel", ActionKind.Clear, onClick = { state.choosingAgent = null })
             ActionPill("Create", ActionKind.Go, onClick = { onCreate(chosen) }, selected = true)
         }
+    }
+}
+
+/**
+ * The conversation's name, optional. It takes the keys as the card opens, so a person can type a name and press
+ * Return. Left blank, the first message names the conversation, as it always has.
+ */
+@Composable
+private fun NameBox(state: LibraryState) {
+    val palette = LocalPalette.current
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    LabeledField("Name") {
+        BasicTextField(
+            value = state.newName,
+            onValueChange = { state.newName = it.replace("\n", " ") },
+            singleLine = true,
+            textStyle = TextStyle(color = palette.ink, fontSize = 13.sp),
+            cursorBrush = SolidColor(palette.ink),
+            modifier = Modifier.fillMaxWidth()
+                .focusRequester(focus)
+                .clip(RoundedCornerShape(8.dp))
+                .border(1.dp, palette.line, RoundedCornerShape(8.dp))
+                .background(palette.page)
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            decorationBox = { field ->
+                Box {
+                    if (state.newName.isEmpty()) Text("Optional. Otherwise named from your first message", color = palette.muted, fontSize = 13.sp)
+                    field()
+                }
+            },
+        )
     }
 }
 

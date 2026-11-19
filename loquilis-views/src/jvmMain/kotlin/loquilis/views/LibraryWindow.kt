@@ -105,11 +105,14 @@ fun LibraryWindow(
     val scope = rememberCoroutineScope()
     // Closes the new-conversation card and starts with [agent], through its setup when it has one.
     val create: (String) -> Unit = { agent ->
-        state.choosingAgent = null
+        state.chosen(agent)
         scope.launch { if (state.prepare(agent)) onNewConversation(agent, "") }
     }
     val keyFocus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { keyFocus.requestFocus() }
+    // At the start, and again whenever the new-conversation card closes: its Name box held the keys, and with it
+    // gone nothing would, so Escape and Return would no longer reach the window's own keys.
+    val cardOpen = state.choosingAgent != null
+    LaunchedEffect(cardOpen) { if (!cardOpen) keyFocus.requestFocus() }
     Box(
         Modifier.fillMaxSize()
             .onPreviewKeyEvent { event ->
@@ -137,9 +140,8 @@ fun LibraryWindow(
             .focusRequester(keyFocus)
             .focusable(),
     ) {
-        val begin: (String) -> Unit = { agent -> scope.launch { if (state.prepare(agent)) onNewConversation(agent, "") } }
-        LaunchedEffect(state.newConversationAsked) { if (state.newConversationAsked > 0) state.startChoosing(begin) }
-        Library(state, brand) { state.startChoosing(begin) }
+        LaunchedEffect(state.newConversationAsked) { if (state.newConversationAsked > 0) state.startChoosing() }
+        Library(state, brand) { state.startChoosing() }
         if (state.choosingAgent != null) NewConversationCard(state) { agent -> create(agent) }
         state.setup?.let { setup ->
             SetupPanel(setup, onClose = { state.setup = null }) { model ->
@@ -248,9 +250,9 @@ private fun ConversationList(state: LibraryState, brand: Brand?, onNewConversati
     val palette = LocalPalette.current
     Column(modifier) {
         brand?.let { BrandLine(it) }
-        // One button however many agents there are. With a choice to make it says so, and opens the card.
+        // One button however many agents there are. It opens the card, where the conversation is named too.
         ActionPill(
-            if (state.agentNames.size == 1) NEW_CONVERSATION else "$NEW_CONVERSATION…",
+            "$NEW_CONVERSATION…",
             ActionKind.Add,
             onClick = onNewConversation,
             modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 4.dp),

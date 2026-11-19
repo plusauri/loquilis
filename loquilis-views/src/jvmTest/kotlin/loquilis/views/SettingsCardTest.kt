@@ -40,7 +40,7 @@ class SettingsCardTest {
 
     @Test fun hidingAnAgentLeavesNoChoiceAndTheLastOneStays() = runDesktopComposeUiTest(1100, 760) {
         val state = open()
-        assertEquals(1, count("New conversation…"), "with two agents, the button opens a choice")
+        assertEquals(1, count("New conversation…"))
         onNodeWithText("Settings").performClick()
         waitForIdle()
         val folder = File("build/review-shots").apply { mkdirs() }
@@ -54,7 +54,6 @@ class SettingsCardTest {
         onNodeWithText("Claude").performClick()
         waitForIdle()
         assertEquals(setOf("grok"), state.settings.hiddenAgents, "the last agent shown cannot be hidden")
-        assertEquals(1, count("New conversation"), "with one agent left, the button starts one at once")
     }
 
     @Test fun theKeepTimeIsKeptAndEscapeCloses() = runDesktopComposeUiTest(1100, 760) {

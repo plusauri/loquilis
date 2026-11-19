@@ -271,9 +271,11 @@ class LocalChatAgent(
 }
 
 /** Adds an empty conversation that an agent will work on in [workspace]. Its first message names it. */
-fun Store.newConversation(workspace: Path, at: Instant, cli: String = "claude", model: String = ""): Conversation {
+/** A new conversation. A blank [title] is filled from the first message, as [LiveChat] names one. */
+fun Store.newConversation(workspace: Path, at: Instant, cli: String = "claude", model: String = "", title: String = ""): Conversation {
     val conversation = Conversation(
         id = Ulid.next(),
+        title = title.trim(),
         created_at = at,
         updated_at = at,
         main_branch_id = Ulid.next(),

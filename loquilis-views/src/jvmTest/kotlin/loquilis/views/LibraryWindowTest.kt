@@ -60,6 +60,14 @@ class LibraryWindowTest {
         return state
     }
 
+    /** The one button opens the card, and Create starts the conversation with no name. */
+    private fun ComposeUiTest.startConversation() {
+        onNodeWithText("New conversation…").performClick()
+        waitForIdle()
+        onNodeWithText("Create").performClick()
+        waitForIdle()
+    }
+
     private fun ComposeUiTest.showing(text: String) {
         waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
     }
@@ -77,7 +85,7 @@ class LibraryWindowTest {
     @Test fun aConversationStartsSendsAndAnswersInTheWindow() = runDesktopComposeUiTest(1100, 700) {
         val state = open(answers)
         showing("Start a conversation to talk to an agent.")
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         write("Tell me about plovers")
         onNodeWithText("Send").performClick()
@@ -94,7 +102,7 @@ class LibraryWindowTest {
 
     @Test fun returnSendsAndClearsTheBox() = runDesktopComposeUiTest(1100, 700) {
         val state = open(answers)
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         write("Hello")
         onNode(hasSetTextAction()).performKeyInput { pressKey(Key.Enter) }
@@ -105,7 +113,7 @@ class LibraryWindowTest {
 
     @Test fun aFailureSaysWhyAndGivesTheMessageBack() = runDesktopComposeUiTest(1100, 700) {
         val state = open(ClaudeAgent(command = listOf(dir.resolve("no-such-program").toString())))
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         write("Hello there")
         onNodeWithText("Send").performClick()
@@ -130,7 +138,7 @@ class LibraryWindowTest {
     )
 
     private fun ComposeUiTest.ask(state: LibraryState) {
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         write("Tidy up")
         onNodeWithText("Send").performClick()
@@ -160,7 +168,7 @@ class LibraryWindowTest {
     @Test fun aConversationWaitingOnAnAnswerSaysSoInTheList() = runDesktopComposeUiTest(1100, 700) {
         val state = open(asking)
         ask(state)
-        onAllNodesWithText("New conversation")[0].performClick()
+        startConversation()
         showing("Waiting for your answer")
         state.close()
     }
@@ -176,7 +184,7 @@ class LibraryWindowTest {
                 """.trimIndent(),
             ),
         )
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         assertEquals(0, onAllNodesWithText("Stop").fetchSemanticsNodes().size)
         write("Go")
@@ -197,7 +205,7 @@ class LibraryWindowTest {
         ).joinToString("\\n")
         reply.writeText("""{"type":"result","is_error":false,"result":"$text","num_turns":1}""")
         val state = open(fake("while read -r line; do cat \"$reply\"; echo; done"))
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         write("Report")
         onNodeWithText("Send").performClick()
@@ -224,7 +232,7 @@ class LibraryWindowTest {
                 """.trimIndent(),
             ),
         )
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         write("Plovers?")
         onNodeWithText("Send").performClick()
@@ -255,7 +263,7 @@ class LibraryWindowTest {
                 """.trimIndent(),
             ),
         )
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         write("Go")
         onNodeWithText("Send").performClick()
@@ -272,10 +280,10 @@ class LibraryWindowTest {
 
     @Test fun deletingAsksFirstAndThenMovesToAnotherConversation() = runDesktopComposeUiTest(1100, 700) {
         val state = open(answers)
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         val first = state.currentId!!
-        onAllNodesWithText("New conversation")[0].performClick()
+        startConversation()
         waitForIdle()
         val second = state.currentId!!
 
@@ -299,7 +307,7 @@ class LibraryWindowTest {
 
     @Test fun theLastConversationCanGoToo() = runDesktopComposeUiTest(1100, 700) {
         val state = open(answers)
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         state.perform(ConsoleAction.DeleteConversation)
         waitForIdle()
@@ -311,7 +319,7 @@ class LibraryWindowTest {
 
     @Test fun aKeyAsksForTheActionItIsBoundTo() = runDesktopComposeUiTest(1100, 700) {
         val state = open(answers)
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         onNodeWithText("Message").performClick()
         waitForIdle()
@@ -332,11 +340,11 @@ class LibraryWindowTest {
 
     @Test fun aSecondConversationKeepsItsOwnDraft() = runDesktopComposeUiTest(1100, 700) {
         val state = open(answers)
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         val first = state.currentId!!
         write("Half a thought")
-        onAllNodesWithText("New conversation")[0].performClick()
+        startConversation()
         waitForIdle()
         assertEquals(2, state.conversations.size)
         assertEquals("", state.drafts[state.currentId].orEmpty())
@@ -350,7 +358,7 @@ class LibraryWindowTest {
         val state = open(
             fake("while read -r line; do sleep 0.3; printf '%s\\n' '{\"type\":\"result\",\"is_error\":false,\"result\":\"Done.\",\"num_turns\":1}'; done"),
         )
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         val first = state.currentId!!
         write("Slow one")
@@ -370,7 +378,7 @@ class LibraryWindowTest {
         }
         val state = LibraryState(store, mapOf("claude" to local), settings = ConsoleSettings(offlineOnly = true), networks = { networks })
         setContent { ReviewTheme { LibraryWindow(state) { _, _ -> state.newConversation(dir) } } }
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         showing("On a network (en0). Nothing is sent until it is off.")
         write("Tell me about plovers")
@@ -394,7 +402,7 @@ class LibraryWindowTest {
         val state = LibraryState(store, mapOf("claude" to answers), onSettings = { kept += it }, networks = { emptyList() })
         setContent { ReviewTheme { LibraryWindow(state) { _, _ -> state.newConversation(dir) } } }
         onNodeWithText("Offline only").performClick()
-        onNodeWithText("New conversation").performClick()
+        startConversation()
         waitForIdle()
         write("Tell me about plovers")
         onNodeWithText("Send").performClick()
