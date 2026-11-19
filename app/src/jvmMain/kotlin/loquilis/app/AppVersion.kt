@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 17
-    const val LAST_CHANGE = "One New conversation button with a choice of agents; side panels fold and resize"
+    private const val PATCH = 18
+    const val LAST_CHANGE = "Agent choices line up their check boxes"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 
