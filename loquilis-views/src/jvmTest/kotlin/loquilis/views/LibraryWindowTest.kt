@@ -356,11 +356,11 @@ class LibraryWindowTest {
         onNodeWithText("Message").performClick()
         waitForIdle()
         topRoot().performKeyInput {
-            keyDown(Key.MetaLeft)
+            keyDown(commandKey)
             keyDown(Key.ShiftLeft)
             pressKey(Key.Backspace)
             keyUp(Key.ShiftLeft)
-            keyUp(Key.MetaLeft)
+            keyUp(commandKey)
         }
         waitForIdle()
         assertEquals(state.currentId, state.deleting?.id)

@@ -75,8 +75,7 @@ class NewConversationCardTest {
 
     @Test fun returnCreatesEscapeClosesAndCommandNOpens() = runDesktopComposeUiTest(1100, 760) {
         val state = open()
-        val command = if (System.getProperty("os.name").startsWith("Mac")) Key.MetaLeft else Key.CtrlLeft
-        topRoot().performKeyInput { withKeyDown(command) { pressKey(Key.N) } }
+        topRoot().performKeyInput { withKeyDown(commandKey) { pressKey(Key.N) } }
         waitForIdle()
         assertEquals("claude", state.choosingAgent)
 

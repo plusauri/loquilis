@@ -26,3 +26,8 @@ internal fun ComposeUiTest.windowShot(): BufferedImage {
     pen.dispose()
     return shot
 }
+
+/** The platform's command key, as [KeyChord.command] reads it: Command on a Mac, Control elsewhere. */
+internal val commandKey: androidx.compose.ui.input.key.Key =
+    if (System.getProperty("os.name").orEmpty().startsWith("Mac")) androidx.compose.ui.input.key.Key.MetaLeft
+    else androidx.compose.ui.input.key.Key.CtrlLeft
