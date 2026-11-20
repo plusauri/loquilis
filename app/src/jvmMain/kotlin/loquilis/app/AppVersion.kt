@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 21
-    const val LAST_CHANGE = "Rename a conversation from beside its title; Back has an arrow"
+    private const val PATCH = 22
+    const val LAST_CHANGE = "Text sizes come from the theme (ConsoleType)"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 

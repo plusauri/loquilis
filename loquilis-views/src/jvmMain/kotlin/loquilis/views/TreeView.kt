@@ -23,7 +23,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -117,7 +116,7 @@ private fun CollapseAllBar(state: ConversationState) {
         Text(
             "Collapse all",
             color = if (anyOpen) palette.accent else palette.muted,
-            fontSize = 12.sp,
+            style = type.detail,
             modifier = Modifier.clickable(enabled = anyOpen, onClick = state::collapseAll).padding(horizontal = 6.dp, vertical = 2.dp),
         )
     }
@@ -155,6 +154,7 @@ private fun TreeLine(
                 TreeFold.Closed -> "▸"
             },
             color = palette.muted,
+            // The fold arrow is a glyph sized to its 18 dp column, not text, so it stays out of the console's type.
             fontSize = 16.sp,
             modifier = Modifier.width(18.dp),
         )
@@ -162,21 +162,20 @@ private fun TreeLine(
         Text(
             label,
             color = if (failed) palette.failed else palette.accent,
-            fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
+            style = type.code,
             modifier = Modifier.width(84.dp),
             maxLines = 1,
         )
         Text(
             text,
             color = if (failed) palette.failed else palette.ink,
-            fontSize = 13.sp,
+            style = type.body,
             fontWeight = if (emphasized) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        tag?.let { Text(it, color = palette.muted, fontSize = 11.sp) }
+        tag?.let { Text(it, color = palette.muted, style = type.caption) }
     }
 }
 

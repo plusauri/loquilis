@@ -32,9 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import loquilis.store.modelInUse
 
 /**
@@ -83,10 +81,10 @@ private fun TopBar(state: ConversationState, titleActions: @Composable RowScope.
         ) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(state.pager.conversation.title.ifEmpty { NEW_CONVERSATION }, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = palette.ink)
+                    Text(state.pager.conversation.title.ifEmpty { NEW_CONVERSATION }, style = type.title, color = palette.ink)
                     titleActions()
                 }
-                Text(summaryLine(state.pager), fontSize = 12.sp, color = palette.muted)
+                Text(summaryLine(state.pager), style = type.detail, color = palette.muted)
             }
             Spacer(Modifier.weight(1f))
             PickOne(ConversationView.entries, state.view, { it.label }, state::show)

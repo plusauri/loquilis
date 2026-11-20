@@ -30,13 +30,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -69,7 +67,7 @@ fun SearchView(state: ConversationState) {
                 value = state.query,
                 onValueChange = { state.query = it },
                 singleLine = true,
-                textStyle = TextStyle(color = palette.ink, fontSize = 14.sp),
+                textStyle = type.reading.copy(color = palette.ink),
                 cursorBrush = SolidColor(palette.accent),
                 modifier = Modifier.weight(1f).focusRequester(focus),
                 decorationBox = { field ->
@@ -79,7 +77,7 @@ fun SearchView(state: ConversationState) {
                             .background(palette.page, RoundedCornerShape(8.dp))
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                     ) {
-                        if (state.query.isEmpty()) Text("Search", color = palette.muted, fontSize = 14.sp)
+                        if (state.query.isEmpty()) Text("Search", color = palette.muted, style = type.reading)
                         field()
                     }
                 },
@@ -91,7 +89,7 @@ fun SearchView(state: ConversationState) {
                 Text(
                     if (state.query.isBlank()) "Every word must match. Put a phrase in double quotes." else "No matches.",
                     color = palette.muted,
-                    fontSize = 13.sp,
+                    style = type.body,
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
             } else {
@@ -116,15 +114,14 @@ private fun Hit(row: SearchRow, showTitle: Boolean, onClick: () -> Unit) {
         Text(
             if (showTitle) "${row.kind} · ${row.conversationTitle}" else row.kind,
             color = palette.muted,
-            fontSize = 11.sp,
+            style = type.caption,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Text(
             highlighted(row.hit.snippet, palette.selection),
             color = palette.ink,
-            fontSize = 13.sp,
-            lineHeight = 18.sp,
+            style = type.body,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
         )

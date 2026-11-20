@@ -32,7 +32,6 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /** A reply laid out as a page. */
 @Composable
@@ -46,19 +45,17 @@ internal fun MarkdownView(blocks: List<MarkdownBlock>, ink: Color) {
 private fun MarkdownBlockView(block: MarkdownBlock, ink: Color) {
     val palette = LocalPalette.current
     when (block) {
-        is MarkdownBlock.Paragraph -> Text(annotated(block.runs), color = ink, fontSize = 14.sp, lineHeight = 20.sp)
+        is MarkdownBlock.Paragraph -> Text(annotated(block.runs), color = ink, style = type.reading)
         is MarkdownBlock.Heading -> Text(
             annotated(block.runs),
             color = ink,
-            fontSize = headingSize(block.level).sp,
-            lineHeight = (headingSize(block.level) + 6).sp,
-            fontWeight = FontWeight.SemiBold,
+            style = type.heading(block.level),
             modifier = Modifier.padding(top = 4.dp),
         )
         is MarkdownBlock.Code -> Box(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(palette.page).horizontalScroll(rememberScrollState()).padding(10.dp),
         ) {
-            Text(block.text, color = palette.ink, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = FontFamily.Monospace, softWrap = false)
+            Text(block.text, color = palette.ink, style = type.code, softWrap = false)
         }
         is MarkdownBlock.Quote -> Row(Modifier.height(IntrinsicSize.Min)) {
             Box(Modifier.width(3.dp).fillMaxHeight().background(palette.muted))
@@ -67,7 +64,7 @@ private fun MarkdownBlockView(block: MarkdownBlock, ink: Color) {
         is MarkdownBlock.Items -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             block.items.forEachIndexed { index, item ->
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(block.markers[index], color = ink, fontSize = 14.sp, lineHeight = 20.sp)
+                    Text(block.markers[index], color = ink, style = type.reading)
                     MarkdownView(item, ink)
                 }
             }
@@ -75,12 +72,6 @@ private fun MarkdownBlockView(block: MarkdownBlock, ink: Color) {
         is MarkdownBlock.Table -> MarkdownTable(block, ink)
         MarkdownBlock.Rule -> Box(Modifier.fillMaxWidth().height(1.dp).background(palette.muted))
     }
-}
-
-private fun headingSize(level: Int) = when (level) {
-    1 -> 18
-    2 -> 16
-    else -> 14
 }
 
 @Composable
@@ -102,8 +93,7 @@ private fun TableRow(cells: List<List<InlineRun>>, ink: Color, bold: Boolean) {
             Text(
                 annotated(cell),
                 color = ink,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
+                style = type.body,
                 fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 5.dp),
             )

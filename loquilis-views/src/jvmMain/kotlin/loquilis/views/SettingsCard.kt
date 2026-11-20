@@ -13,7 +13,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 /** The console's settings, each kept as soon as it changes. Escape or a click outside closes it. */
 @Composable
@@ -33,7 +32,7 @@ internal fun SettingsCard(state: LibraryState, onClose: () -> Unit) {
         Hint("A hidden agent's conversations still open and go on. One agent always stays.")
 
         Section("Local models")
-        Text("Keep a model in memory after it answers", color = palette.ink, fontSize = 13.sp)
+        Text("Keep a model in memory after it answers", color = palette.ink, style = type.body)
         PickOne(ConsoleSettings.KEEP_MINUTES, settings.keepModelMinutes, label = { "$it min" }) {
             state.change(settings.copy(keepModelMinutes = it))
         }
@@ -44,10 +43,10 @@ internal fun SettingsCard(state: LibraryState, onClose: () -> Unit) {
 
 @Composable
 private fun Section(title: String) {
-    Text(title, color = LocalPalette.current.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+    Text(title, color = LocalPalette.current.muted, style = type.detail, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
 }
 
 @Composable
 private fun Hint(text: String) {
-    Text(text, color = LocalPalette.current.muted, fontSize = 12.sp, lineHeight = 16.sp)
+    Text(text, color = LocalPalette.current.muted, style = type.detail)
 }

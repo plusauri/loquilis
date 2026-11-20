@@ -40,11 +40,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import loquilis.core.EntryKind
 import loquilis.core.kind
 import loquilis.model.Content
@@ -146,7 +144,7 @@ private fun UserBubble(text: String, selected: Boolean, onClick: () -> Unit) {
             // The usual selection color is blue, which cannot be seen on this bubble.
             val selection = TextSelectionColors(palette.userInk, palette.userInk.copy(alpha = 0.35f))
             CompositionLocalProvider(LocalTextSelectionColors provides selection) {
-                SelectionContainer { Text(text, color = palette.userInk, fontSize = 14.sp, lineHeight = 20.sp) }
+                SelectionContainer { Text(text, color = palette.userInk, style = type.reading) }
             }
         }
     }
@@ -209,8 +207,8 @@ private fun WorkFold(row: MessageRow.Work, open: Boolean, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(if (open) "▾" else "▸", color = palette.muted, fontSize = 12.sp)
-        Text(row.summary, color = palette.muted, fontSize = 12.sp)
+        Text(if (open) "▾" else "▸", color = palette.muted, style = type.detail)
+        Text(row.summary, color = palette.muted, style = type.detail)
     }
 }
 
@@ -232,14 +230,13 @@ private fun StepLine(row: MessageRow.Step, selected: Boolean, onClick: () -> Uni
         Text(
             kindLabel(row.entry),
             color = if (failed) palette.failed else palette.accent,
-            fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
+            style = type.code,
             modifier = Modifier.widthIn(min = 72.dp),
         )
         Text(
             headline(row.entry),
             color = if (failed) palette.failed else palette.ink,
-            fontSize = 12.sp,
+            style = type.detail,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -249,7 +246,7 @@ private fun StepLine(row: MessageRow.Step, selected: Boolean, onClick: () -> Uni
 /** Holds its width when empty, so the rows below it keep their columns. */
 @Composable
 internal fun OutcomeMark(mark: String?) {
-    Text(mark.orEmpty(), fontSize = 12.sp, modifier = Modifier.width(18.dp))
+    Text(mark.orEmpty(), style = type.detail, modifier = Modifier.width(18.dp))
 }
 
 @Composable
@@ -258,7 +255,7 @@ private fun NoteLine(entry: Entry, selected: Boolean, onClick: () -> Unit) {
     Text(
         headline(entry),
         color = palette.muted,
-        fontSize = 12.sp,
+        style = type.detail,
         modifier = Modifier
             .fillMaxWidth()
             .background(if (selected) palette.selection else Color.Transparent)
@@ -274,7 +271,7 @@ private fun TurnFooter(row: MessageRow.Footer, selected: Boolean, onClick: () ->
     Text(
         turnEndLine(row.entry, row.result),
         color = if (failed) palette.failed else palette.muted,
-        fontSize = 11.sp,
+        style = type.caption,
         modifier = Modifier
             .clip(RoundedCornerShape(6.dp))
             .background(if (selected) palette.selection else Color.Transparent)

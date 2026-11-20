@@ -16,7 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -28,7 +27,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
 import plusauri.ui.LabeledField
 import plusauri.ui.ActionKind
 import plusauri.ui.ActionPill
@@ -67,7 +65,7 @@ internal fun NewConversationCard(state: LibraryState, onCreate: (agent: String) 
             // No choice to make, but still worth saying what the one agent is and where its data goes.
             AgentAbout(state, chosen)
         } else {
-            Text("Choose who to talk to.", color = palette.muted, fontSize = 13.sp)
+            Text("Choose who to talk to.", color = palette.muted, style = type.body)
             MultiButtonSelect(
                 buttonSelections = names.map { ButtonData(ButtonImage.Unicode(agentLabel(it))) to ToggleState.Deselected },
                 contentMaker = { index -> AgentAbout(state, names[index]) },
@@ -109,7 +107,7 @@ internal fun NameField(value: String, onValueChange: (String) -> Unit, placehold
             value = value,
             onValueChange = { onValueChange(it.replace("\n", " ")) },
             singleLine = true,
-            textStyle = TextStyle(color = palette.ink, fontSize = 13.sp),
+            textStyle = type.body.copy(color = palette.ink),
             cursorBrush = SolidColor(palette.ink),
             modifier = Modifier.fillMaxWidth()
                 .focusRequester(focus)
@@ -119,7 +117,7 @@ internal fun NameField(value: String, onValueChange: (String) -> Unit, placehold
                 .padding(horizontal = 10.dp, vertical = 7.dp),
             decorationBox = { field ->
                 Box {
-                    if (value.isEmpty()) Text(placeholder, color = palette.muted, fontSize = 13.sp)
+                    if (value.isEmpty()) Text(placeholder, color = palette.muted, style = type.body)
                     field()
                 }
             },
@@ -133,13 +131,13 @@ private fun AgentAbout(state: LibraryState, agent: String) {
     val palette = LocalPalette.current
     val goes = state.agentDataGoes(agent)
     Column(Modifier.fillMaxWidth().heightIn(min = 120.dp).padding(start = 14.dp, top = 2.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(agentLabel(agent), color = palette.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        state.describe(agent).takeIf { it.isNotBlank() }?.let { Text(it, color = palette.ink, fontSize = 13.sp, lineHeight = 18.sp) }
+        Text(agentLabel(agent), color = palette.ink, style = type.reading, fontWeight = FontWeight.SemiBold)
+        state.describe(agent).takeIf { it.isNotBlank() }?.let { Text(it, color = palette.ink, style = type.body) }
         DataGoesLine(goes, goes.words)
         Text(
             if (state.needsFolder(agent)) "You choose the folder it works in next." else "It needs no folder.",
             color = palette.muted,
-            fontSize = 12.sp,
+            style = type.detail,
         )
     }
 }

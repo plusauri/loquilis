@@ -72,8 +72,6 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -219,8 +217,7 @@ private fun ConfirmDelete(conversation: Conversation, onCancel: () -> Unit, onDe
             "This removes the conversation and everything recorded for it from this library. It cannot be undone. " +
                 "The agent's own session history stays where the agent keeps it.",
             color = palette.muted,
-            fontSize = 13.sp,
-            lineHeight = 18.sp,
+            style = type.body,
         )
     }
 }
@@ -237,7 +234,7 @@ private fun Library(state: LibraryState, brand: Brand?, onNewConversation: () ->
         val id = state.currentId
         if (showing == null || id == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Start a conversation to talk to an agent.", color = palette.muted, fontSize = 14.sp)
+                Text("Start a conversation to talk to an agent.", color = palette.muted, style = type.reading)
             }
         } else {
             key(id) { Follow(state, showing, id) }
@@ -318,8 +315,8 @@ private fun BrandLine(brand: Brand) {
             Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 for ((label, value) in brand.about) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(label, color = palette.muted, fontSize = 12.sp, modifier = Modifier.width(84.dp))
-                        Text(value, color = palette.ink, fontSize = 12.sp)
+                        Text(label, color = palette.muted, style = type.detail, modifier = Modifier.width(84.dp))
+                        Text(value, color = palette.ink, style = type.detail)
                     }
                 }
             }
@@ -331,7 +328,7 @@ private fun BrandLine(brand: Brand) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Image(brand.mark, contentDescription = null, Modifier.size(24.dp))
-            Text(brand.name, color = palette.ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(brand.name, color = palette.ink, style = type.reading, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -353,9 +350,9 @@ private fun ConversationLine(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 8.dp)) {
-            Text(conversation.shownTitle, color = palette.ink, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(conversation.shownTitle, color = palette.ink, style = type.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (asking) {
-                Text("Waiting for your answer", color = palette.accent, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Waiting for your answer", color = palette.accent, style = type.caption, maxLines = 1, overflow = TextOverflow.Ellipsis)
             } else {
                 DataGoesLine(goes, place(conversation))
             }
@@ -389,10 +386,11 @@ internal fun DataGoesLine(goes: DataGoes, text: String) {
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Box(Modifier.size(16.dp).clip(CircleShape).background(disc), contentAlignment = Alignment.Center) {
+            // A glyph sized to its 16 dp disc, not text, so it stays out of the console's type.
             Text(goes.mark, fontSize = 8.sp, lineHeight = 8.sp)
         }
         // One line wherever it sits, and when that cuts it short a hover shows the rest.
-        OverflowTooltipText(text, style = TextStyle(fontSize = 11.sp), color = palette.muted)
+        OverflowTooltipText(text, style = type.caption, color = palette.muted)
     }
 }
 
@@ -430,14 +428,13 @@ private fun AskCard(ask: PermissionAsk, more: Int, onAnswer: (Decision) -> Unit)
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         val title = "May the agent use ${ask.tool}?" + if (more > 0) " ($more more after this)" else ""
-        Text(title, color = palette.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-        if (ask.description.isNotBlank()) Text(ask.description, color = palette.muted, fontSize = 12.sp)
+        Text(title, color = palette.ink, style = type.body, fontWeight = FontWeight.SemiBold)
+        if (ask.description.isNotBlank()) Text(ask.description, color = palette.muted, style = type.detail)
         if (ask.detail.isNotBlank()) {
             Text(
                 ask.detail,
                 color = palette.ink,
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
+                style = type.code,
                 maxLines = 6,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().background(palette.panel).padding(8.dp),
@@ -474,7 +471,7 @@ private fun ComposerButton(
         horizontalArrangement = Arrangement.spacedBy(7.dp),
     ) {
         leading?.invoke()
-        Text(label, color = ink, fontSize = 13.sp)
+        Text(label, color = ink, style = type.body)
     }
 }
 
@@ -516,13 +513,13 @@ private fun Composer(state: LibraryState, id: String) {
             }
         }
         refused?.let { line ->
-            Text(line, color = palette.failed, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+            Text(line, color = palette.failed, style = type.detail, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
         }
         statusLine(status, now)?.let { line ->
             Text(
                 line,
                 color = if (status is ChatStatus.Failed) palette.failed else palette.muted,
-                fontSize = 12.sp,
+                style = type.detail,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
             )
         }
@@ -534,7 +531,7 @@ private fun Composer(state: LibraryState, id: String) {
             BasicTextField(
                 value = text,
                 onValueChange = { state.drafts[id] = it },
-                textStyle = TextStyle(color = palette.ink, fontSize = 14.sp),
+                textStyle = type.reading.copy(color = palette.ink),
                 cursorBrush = SolidColor(palette.ink),
                 maxLines = 8,
                 modifier = Modifier.weight(1f)
@@ -550,7 +547,7 @@ private fun Composer(state: LibraryState, id: String) {
                     },
                 decorationBox = { field ->
                     Box {
-                        if (text.isEmpty()) Text("Message", color = palette.muted, fontSize = 14.sp)
+                        if (text.isEmpty()) Text("Message", color = palette.muted, style = type.reading)
                         field()
                     }
                 },
@@ -604,7 +601,7 @@ internal fun OfflineOnlySwitch(state: LibraryState, modifier: Modifier = Modifie
             if (joined.isEmpty()) {
                 DataGoesLine(DataGoes.StaysHere, "Off the network. Local models only.")
             } else {
-                Text("On a network (${joined.joinToString()}). Nothing is sent until it is off.", color = palette.failed, fontSize = 11.sp, lineHeight = 15.sp)
+                Text("On a network (${joined.joinToString()}). Nothing is sent until it is off.", color = palette.failed, style = type.caption)
             }
         }
     }

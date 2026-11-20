@@ -20,11 +20,8 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.Dispatchers
@@ -53,7 +50,7 @@ fun Inspector(state: ConversationState, modifier: Modifier) {
                 Text(
                     "Select anything in the conversation to see its entry and the raw lines it came from.",
                     color = palette.muted,
-                    fontSize = 13.sp,
+                    style = type.body,
                     modifier = Modifier.padding(16.dp),
                 )
             }
@@ -61,7 +58,7 @@ fun Inspector(state: ConversationState, modifier: Modifier) {
             val entry = inspection.entry
             val scroll = remember(entry.id) { androidx.compose.foundation.ScrollState(0) }
             Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(kindLabel(entry), fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = palette.ink)
+                Text(kindLabel(entry), style = type.title, color = palette.ink)
                 SelectionContainer { Fields(inspection, state) }
                 inspection.sections.forEach { Code("${it.label} · ${where(it.content, it.text)}", "Copy ${it.label.lowercase()}", it.text) }
                 val raw = inspection.raw
@@ -95,12 +92,11 @@ private fun Fields(inspection: Inspection, state: ConversationState) {
 private fun Field(name: String, value: String, onClick: (() -> Unit)? = null) {
     val palette = LocalPalette.current
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(name, color = palette.muted, fontSize = 12.sp, modifier = Modifier.width(72.dp))
+        Text(name, color = palette.muted, style = type.detail, modifier = Modifier.width(72.dp))
         Text(
             value,
             color = if (onClick != null) palette.accent else palette.ink,
-            fontSize = 12.sp,
-            fontFamily = FontFamily.Monospace,
+            style = type.code,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
@@ -113,11 +109,11 @@ private fun Code(label: String, copyName: String, text: String) {
     val palette = LocalPalette.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = palette.muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Text(label, color = palette.muted, style = type.detail, modifier = Modifier.weight(1f))
             CopyIconButton(textToCopy = { text }, contentDescription = copyName)
         }
         SelectionContainer {
-            Text(shown(text), color = palette.ink, fontSize = 12.sp, lineHeight = 17.sp, fontFamily = FontFamily.Monospace)
+            Text(shown(text), color = palette.ink, style = type.code)
         }
     }
 }

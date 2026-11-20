@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import java.awt.Desktop
 import java.io.IOException
 import java.net.URI
@@ -203,7 +202,7 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onBack: () -> Un
         if (runner == RunnerState.NotInstalled || runner == RunnerState.NotRunning) {
             Note("Ollama may show its own welcome the first time. You can close it. Signing in is not needed for models on this computer.")
         }
-        setup.problem?.let { Text(it, color = palette.failed, fontSize = 12.sp) }
+        setup.problem?.let { Text(it, color = palette.failed, style = type.detail) }
     }
 }
 
@@ -219,11 +218,11 @@ private fun InstalledChoice(name: String, known: CatalogModel?, first: Boolean, 
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(known?.label ?: name, color = palette.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(known?.label ?: name, color = palette.ink, style = type.body, fontWeight = FontWeight.SemiBold)
             Text(
                 listOfNotNull(name.takeIf { known != null }, known?.let { "about ${gb(it.memoryGb)} of memory while it answers" }).joinToString(" · ").ifEmpty { "On this computer" },
                 color = palette.muted,
-                fontSize = 11.sp,
+                style = type.caption,
             )
         }
         if (enabled) ActionPill("Start", ActionKind.Run, onClick = onStart, selected = first)
@@ -244,19 +243,19 @@ private fun ModelChoice(model: CatalogModel, recommended: Boolean, setup: SetupS
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(model.label, color = palette.ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            if (recommended) Text("Suits this computer", color = palette.accent, fontSize = 11.sp)
+            Text(model.label, color = palette.ink, style = type.body, fontWeight = FontWeight.SemiBold)
+            if (recommended) Text("Suits this computer", color = palette.accent, style = type.caption)
         }
-        Text(model.goodFor, color = palette.muted, fontSize = 12.sp)
+        Text(model.goodFor, color = palette.muted, style = type.detail)
         Text(
             "${gb(model.downloadGb)} download · about ${gb(model.memoryGb)} of memory while it answers · ${model.maker} · ${model.name}",
             color = palette.muted,
-            fontSize = 11.sp,
+            style = type.caption,
         )
         when {
             pulling == model -> Progress(setup.progress)
             pulling != null -> {}
-            !roomy -> Text("Needs ${gb(model.downloadGb + DISK_SPARE_GB)} of free disk; this computer has ${gb(freeGb)}.", color = palette.failed, fontSize = 11.sp)
+            !roomy -> Text("Needs ${gb(model.downloadGb + DISK_SPARE_GB)} of free disk; this computer has ${gb(freeGb)}.", color = palette.failed, style = type.caption)
             else -> Buttons {
                 ActionPill("Download", ActionKind.Add, onClick = onDownload, selected = recommended && prominent)
             }
@@ -276,14 +275,14 @@ private fun Progress(progress: PullProgress?) {
         Text(
             if (total > 0) "${gb(progress!!.completed / GB)} of ${gb(total / GB)}" else progress?.status?.replaceFirstChar(Char::uppercase) ?: "Starting…",
             color = palette.muted,
-            fontSize = 11.sp,
+            style = type.caption,
         )
     }
 }
 
 @Composable
 private fun Note(text: String) {
-    Text(text, color = LocalPalette.current.muted, fontSize = 13.sp, lineHeight = 18.sp)
+    Text(text, color = LocalPalette.current.muted, style = type.body)
 }
 
 @Composable

@@ -5,9 +5,14 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import plusauri.ui.CopyWords
 import plusauri.ui.LocalCopyWords
 import plusauri.ui.LocalScrollCueWords
@@ -65,6 +70,48 @@ data class Palette(
 
 val LocalPalette = staticCompositionLocalOf { Palette.Light }
 
+/**
+ * The console's text by role, as [Palette] is its colors: views name a role and never a size, so a client can
+ * set the console's type in one place (`doc/decisions/0002-bespoke-consoles.md`). Each role carries its line
+ * height, so a paragraph and a single line of the same role read alike.
+ */
+data class ConsoleType(
+    /** A conversation's title, and the heading of what the inspector shows. */
+    val title: TextStyle,
+    /** What is said: messages, replies, and the boxes they are written in. */
+    val reading: TextStyle,
+    /** The console's own words: list rows, dialog text, descriptions. */
+    val body: TextStyle,
+    /** What is said about something: summary lines, settings notes, metadata. */
+    val detail: TextStyle,
+    /** The smallest words: where data goes, a status under a row. */
+    val caption: TextStyle,
+    /** Code and raw lines, in a fixed-width face. */
+    val code: TextStyle,
+    /** Markdown headings by level, from 1; levels past the end take the last. */
+    val headings: List<TextStyle>,
+) {
+    fun heading(level: Int): TextStyle = headings[(level - 1).coerceIn(0, headings.lastIndex)]
+
+    companion object {
+        val Default = ConsoleType(
+            title = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold),
+            reading = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
+            body = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
+            detail = TextStyle(fontSize = 12.sp, lineHeight = 17.sp),
+            caption = TextStyle(fontSize = 11.sp, lineHeight = 15.sp),
+            code = TextStyle(fontSize = 12.sp, lineHeight = 17.sp, fontFamily = FontFamily.Monospace),
+            headings = listOf(18, 16, 14).map { TextStyle(fontSize = it.sp, lineHeight = (it + 6).sp, fontWeight = FontWeight.SemiBold) },
+        )
+    }
+}
+
+val LocalConsoleType = staticCompositionLocalOf { ConsoleType.Default }
+
+/** The console's type, where a view reads it. */
+internal val type: ConsoleType
+    @Composable @ReadOnlyComposable get() = LocalConsoleType.current
+
 /** What the kit's controls say, given once here as the kit asks of its host (`plusauri.ui.KitWords`). */
 private val KitCopyWords = CopyWords(copy = "Copy", copied = "Copied", hint = "Click to copy")
 private val KitScrollCueWords = ScrollCueWords(down = "More below", up = "More above")
@@ -72,12 +119,13 @@ private val KitYearInputWords = YearInputWords(placeholder = "Year")
 
 /**
  * The console's theme: the kit's Plusauri theme underneath, so kit controls look as they do in Tutilis, and
- * [palette] over it for the console's own views. A client passes its own [palette] to retheme.
+ * [palette] and [type] over it for the console's own views. A client passes its own to retheme.
  */
 @Composable
 fun ReviewTheme(
     dark: Boolean = isSystemInDarkTheme(),
     palette: Palette = if (dark) Palette.Dark else Palette.Light,
+    type: ConsoleType = ConsoleType.Default,
     content: @Composable () -> Unit,
 ) {
     PlusauriTheme(isDarkTheme = dark) {
@@ -91,6 +139,7 @@ fun ReviewTheme(
         MaterialTheme(colorScheme = scheme, typography = MaterialTheme.typography) {
             CompositionLocalProvider(
                 LocalPalette provides palette,
+                LocalConsoleType provides type,
                 LocalCopyWords provides KitCopyWords,
                 LocalScrollCueWords provides KitScrollCueWords,
                 LocalYearInputWords provides KitYearInputWords,
