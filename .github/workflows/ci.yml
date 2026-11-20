@@ -5,9 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+# The ui-kit comes from GitHub Packages, which wants a token even to read. A Maven package there takes its
+# access from its own repository (plusauri/ui-kit) and cannot grant another repo's job token, so CI reads it
+# with a classic token that has only `read:packages`, kept as the PLUSAURI_PACKAGES_TOKEN secret.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      PLUSAURI_PACKAGES_TOKEN: ${{ secrets.PLUSAURI_PACKAGES_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
