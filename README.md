@@ -33,3 +33,7 @@ Loquilis depends on nothing in Tutilis, though it is designed to serve Tutilis's
 Early. The repository is private while the model and the library take shape, and it will go public once the library is usable on its own. Until then, nothing here is a stable API.
 
 Loquilis is made by [Plusauri](https://www.plusauri.com), the makers of Tutilis.
+
+## License
+
+MIT; see [LICENSE](LICENSE).
