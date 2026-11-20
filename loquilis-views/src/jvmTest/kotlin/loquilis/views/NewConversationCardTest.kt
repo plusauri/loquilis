@@ -50,7 +50,7 @@ class NewConversationCardTest {
 
     private fun ComposeUiTest.shot(name: String) {
         val folder = File("build/review-shots").apply { mkdirs() }
-        ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(folder, "$name.png"))
+        ImageIO.write(windowShot(), "png", File(folder, "$name.png"))
     }
 
     @Test fun theCardSaysWhatEachAgentIsAndCreatesTheOneChosen() = runDesktopComposeUiTest(1100, 760) {
@@ -76,18 +76,18 @@ class NewConversationCardTest {
     @Test fun returnCreatesEscapeClosesAndCommandNOpens() = runDesktopComposeUiTest(1100, 760) {
         val state = open()
         val command = if (System.getProperty("os.name").startsWith("Mac")) Key.MetaLeft else Key.CtrlLeft
-        onRoot().performKeyInput { withKeyDown(command) { pressKey(Key.N) } }
+        topRoot().performKeyInput { withKeyDown(command) { pressKey(Key.N) } }
         waitForIdle()
         assertEquals("claude", state.choosingAgent)
 
-        onRoot().performKeyInput { pressKey(Key.Escape) }
+        topRoot().performKeyInput { pressKey(Key.Escape) }
         waitForIdle()
         assertNull(state.choosingAgent)
         assertTrue(started.isEmpty())
 
         onNodeWithText("New conversation…").performClick()
         waitForIdle()
-        onRoot().performKeyInput { pressKey(Key.Enter) }
+        topRoot().performKeyInput { pressKey(Key.Enter) }
         waitForIdle()
         assertEquals(listOf("claude"), started)
     }
@@ -122,7 +122,7 @@ class NewConversationCardTest {
         waitForIdle()
         onNode(hasSetTextAction()).performTextInput("Plover notes")
         shot("new-conversation-named")
-        onRoot().performKeyInput { pressKey(Key.Enter) }
+        topRoot().performKeyInput { pressKey(Key.Enter) }
         waitForIdle()
         assertEquals("Plover notes", store.conversation(state.currentId!!)!!.title)
 

@@ -1,5 +1,8 @@
 package loquilis.views
 
+import plusauri.ui.DialogConfirmButton
+import plusauri.ui.DialogDismissButton
+import androidx.compose.ui.input.key.Key
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,8 +52,16 @@ internal fun NewConversationCard(state: LibraryState, onCreate: (agent: String) 
     val palette = LocalPalette.current
     val names = state.agentNames
     val chosen = state.choosingAgent?.takeIf { it in names } ?: names.first()
-    Modal(onDismiss = { state.choosingAgent = null }, width = 560.dp) {
-        Text("New conversation", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    ConsoleDialog(
+        "New conversation",
+        onDismiss = { state.choosingAgent = null },
+        width = 580.dp,
+        keys = { key -> (key == Key.Enter).also { if (it) onCreate(chosen) } },
+        footer = {
+            DialogDismissButton("Cancel", onClick = { state.choosingAgent = null })
+            DialogConfirmButton("Create", onClick = { onCreate(chosen) })
+        },
+    ) {
         NameBox(state)
         if (names.size == 1) {
             // No choice to make, but still worth saying what the one agent is and where its data goes.
@@ -71,10 +82,6 @@ internal fun NewConversationCard(state: LibraryState, onCreate: (agent: String) 
                 fillPanelHeight = false,
                 modifier = Modifier.fillMaxWidth(),
             )
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            ActionPill("Cancel", ActionKind.Clear, onClick = { state.choosingAgent = null })
-            ActionPill("Create", ActionKind.Go, onClick = { onCreate(chosen) }, selected = true)
         }
     }
 }

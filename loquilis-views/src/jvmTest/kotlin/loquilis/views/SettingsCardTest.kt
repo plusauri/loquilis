@@ -44,7 +44,7 @@ class SettingsCardTest {
         onNodeWithText("Settings").performClick()
         waitForIdle()
         val folder = File("build/review-shots").apply { mkdirs() }
-        ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(folder, "settings.png"))
+        ImageIO.write(windowShot(), "png", File(folder, "settings.png"))
 
         onNodeWithText("Grok").performClick()
         waitForIdle()
@@ -63,7 +63,7 @@ class SettingsCardTest {
         waitForIdle()
         assertEquals(5, kept.last().keepModelMinutes)
 
-        onRoot().performKeyInput { pressKey(Key.Escape) }
+        topRoot().performKeyInput { pressKey(Key.Escape) }
         waitForIdle()
         assertEquals(false, state.showingSettings)
         assertEquals(0, count("Keep a model in memory after it answers"))

@@ -83,6 +83,13 @@ class LibraryState(
         choosingAgent = conversations.firstNotNullOfOrNull { c -> c.agent?.cli?.takeIf { it in names } } ?: names.first()
     }
 
+    /** From a setup dialog back to the new-conversation card, on [agent] and with the name typed before. */
+    fun backToChoosing(agent: String) {
+        setup = null
+        newName = namedAtCreate
+        choosingAgent = agent
+    }
+
     /** Closes the card and keeps its name for the conversation about to start. Returns the agent chosen. */
     fun chosen(agent: String): String {
         namedAtCreate = newName.trim()

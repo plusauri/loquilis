@@ -20,8 +20,7 @@ import androidx.compose.ui.unit.sp
 internal fun SettingsCard(state: LibraryState, onClose: () -> Unit) {
     val palette = LocalPalette.current
     val settings = state.settings
-    Modal(onClose, width = 420.dp) {
-        Text("Settings", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    ConsoleDialog("Settings", onDismiss = onClose, width = 440.dp) {
 
         Section("Where data goes")
         OfflineOnlySwitch(state, Modifier)
@@ -40,9 +39,6 @@ internal fun SettingsCard(state: LibraryState, onClose: () -> Unit) {
         }
         Hint("For Local conversations: longer answers the next message sooner, shorter gives the memory back sooner. OpenCode leaves its model to Ollama, which keeps it five minutes. Quitting frees both.")
 
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            ActionPill("Close", ActionKind.Clear, onClick = onClose)
-        }
     }
 }
 

@@ -1,5 +1,12 @@
 package loquilis.views
 
+import plusauri.ui.ResizableDialog
+import plusauri.ui.DialogFooter
+import plusauri.ui.DialogConfirmButton
+import plusauri.ui.DialogDismissButton
+import plusauri.ui.OverflowTooltipText
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material3.MaterialTheme
 import plusauri.ui.ActionKind
 import plusauri.ui.FadingScrollColumn
 import plusauri.ui.bleedEnd
@@ -119,20 +126,6 @@ fun LibraryWindow(
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 val action = keys.actionFor(event)
                 when {
-                    state.deleting != null && event.key == Key.Escape -> true.also { state.deleting = null }
-                    state.choosingAgent != null && event.key == Key.Escape -> true.also { state.choosingAgent = null }
-                    state.choosingAgent != null && event.key == Key.Enter -> true.also { create(state.choosingAgent!!) }
-                    state.showingSettings && event.key == Key.Escape -> true.also { state.showingSettings = false }
-                    state.setup != null && event.key == Key.Escape -> true.also { if (state.setup?.pulling == null) state.setup = null }
-                    state.setup != null && event.key == Key.Enter -> true.also {
-                        val setup = state.setup
-                        val first = setup?.installed?.firstOrNull()
-                        if (setup != null && first != null && setup.pulling == null) {
-                            state.setup = null
-                            onNewConversation(setup.agent, first)
-                        }
-                    }
-                    state.deleting != null && event.key == Key.Enter -> true.also { scope.launch { state.confirmDelete() } }
                     action != null -> true.also { state.perform(action) }
                     else -> false
                 }
@@ -144,7 +137,7 @@ fun LibraryWindow(
         Library(state, brand) { state.startChoosing() }
         if (state.choosingAgent != null) NewConversationCard(state) { agent -> create(agent) }
         state.setup?.let { setup ->
-            SetupPanel(setup, onClose = { state.setup = null }) { model ->
+            SetupPanel(setup, onClose = { state.setup = null }, onBack = { state.backToChoosing(setup.agent) }) { model ->
                 state.setup = null
                 onNewConversation(setup.agent, model)
             }
@@ -156,34 +149,36 @@ fun LibraryWindow(
     }
 }
 
-/** A card over the window that a click outside closes. Every one the console shows comes through here. */
+/**
+ * Every dialog the console shows: the kit's resizable dialog (title, close, a grip to size it), with a body that
+ * scrolls once it stops growing and a [footer] of dialog buttons. [keys] hears the keys pressed inside it, for a
+ * dialog whose Return has an answer; Escape and a click outside already call [onDismiss].
+ */
 @Composable
-internal fun Modal(onDismiss: () -> Unit, width: Dp = 380.dp, content: @Composable ColumnScope.() -> Unit) {
-    val palette = LocalPalette.current
-    Box(
-        Modifier.fillMaxSize()
-            .background(palette.ink.copy(alpha = 0.25f))
-            .clickable(remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
-        contentAlignment = Alignment.Center,
+internal fun ConsoleDialog(
+    title: String,
+    onDismiss: () -> Unit,
+    width: Dp = 420.dp,
+    keys: (Key) -> Boolean = { false },
+    footer: (@Composable RowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    ResizableDialog(
+        title = title,
+        onDismiss = onDismiss,
+        closeLabel = "Close (Esc)",
+        defaultWidth = width,
+        modifier = Modifier.onPreviewKeyEvent { it.type == KeyEventType.KeyDown && keys(it.key) },
     ) {
-        // The kit's scroll column, so a card taller than the window fades at the cut and shows a thumb.
-        Box(
-            Modifier.width(width)
-                .padding(vertical = 24.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(palette.page)
-                .clickable(remember { MutableInteractionSource() }, indication = null) {},
-        ) {
-            FadingScrollColumn(
-                // The thumb rides in the card's right margin, beside the content rather than over it.
-                Modifier.padding(20.dp).bleedEnd(14.dp),
-                fadeColor = palette.page,
-                scrollbar = true,
-                scrollbarGutter = 14.dp,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                content = content,
-            )
-        }
+        FadingScrollColumn(
+            Modifier.weight(1f, fill = false).bleedEnd(14.dp),
+            fadeColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            scrollbar = true,
+            scrollbarGutter = 14.dp,
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            content = content,
+        )
+        footer?.let { DialogFooter(content = it) }
     }
 }
 
@@ -191,8 +186,15 @@ internal fun Modal(onDismiss: () -> Unit, width: Dp = 380.dp, content: @Composab
 @Composable
 private fun ConfirmDelete(conversation: Conversation, onCancel: () -> Unit, onDelete: () -> Unit) {
     val palette = LocalPalette.current
-    Modal(onCancel) {
-        Text("Delete “${conversation.shownTitle}”?", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    ConsoleDialog(
+        "Delete “${conversation.shownTitle}”?",
+        onDismiss = onCancel,
+        keys = { key -> (key == Key.Enter).also { if (it) onDelete() } },
+        footer = {
+            DialogDismissButton("Cancel", onClick = onCancel)
+            DialogConfirmButton("Delete", onClick = onDelete, destructive = true)
+        },
+    ) {
         Text(
             "This removes the conversation and everything recorded for it from this library. It cannot be undone. " +
                 "The agent's own session history stays where the agent keeps it.",
@@ -200,10 +202,6 @@ private fun ConfirmDelete(conversation: Conversation, onCancel: () -> Unit, onDe
             fontSize = 13.sp,
             lineHeight = 18.sp,
         )
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            ActionPill("Cancel", ActionKind.Clear, onClick = onCancel)
-            ActionPill("Delete", ActionKind.Remove, onClick = onDelete, selected = true)
-        }
     }
 }
 
@@ -362,7 +360,8 @@ internal fun DataGoesLine(goes: DataGoes, text: String) {
         Box(Modifier.size(16.dp).clip(CircleShape).background(disc), contentAlignment = Alignment.Center) {
             Text(goes.mark, fontSize = 8.sp, lineHeight = 8.sp)
         }
-        Text(text, color = palette.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        // One line wherever it sits, and when that cuts it short a hover shows the rest.
+        OverflowTooltipText(text, style = TextStyle(fontSize = 11.sp), color = palette.muted)
     }
 }
 
@@ -413,12 +412,13 @@ private fun AskCard(ask: PermissionAsk, more: Int, onAnswer: (Decision) -> Unit)
                 modifier = Modifier.fillMaxWidth().background(palette.panel).padding(8.dp),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ActionPill("Allow", ActionKind.Go, onClick = { onAnswer(Decision.DECISION_ALLOW_ONCE) }, selected = true)
-            ActionPill("Deny", ActionKind.Clear, onClick = { onAnswer(Decision.DECISION_DENY) })
-        }
-        ask.remember?.let { rule ->
-            ActionPill("Always allow $rule in this folder", ActionKind.Go, onClick = { onAnswer(Decision.DECISION_ALLOW_ALWAYS) })
+        // A question with answers, so the dialog buttons: the answer filled, the others dismiss-weight.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            DialogConfirmButton("Allow", onClick = { onAnswer(Decision.DECISION_ALLOW_ONCE) })
+            DialogDismissButton("Deny", onClick = { onAnswer(Decision.DECISION_DENY) })
+            ask.remember?.let { rule ->
+                DialogDismissButton("Always allow $rule in this folder", onClick = { onAnswer(Decision.DECISION_ALLOW_ALWAYS) }, modifier = Modifier.weight(1f, fill = false))
+            }
         }
     }
 }

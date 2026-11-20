@@ -86,7 +86,7 @@ class SetupPanelTest {
 
     private fun ComposeUiTest.shot(name: String) {
         val folder = File("build/review-shots").apply { mkdirs() }
-        ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(folder, "$name.png"))
+        ImageIO.write(windowShot(), "png", File(folder, "$name.png"))
     }
 
     @Test fun withNoModelTheCardOffersOneAndTheConversationStartsOnceItIsDownloaded() = runDesktopComposeUiTest(1100, 760) {
@@ -115,7 +115,7 @@ class SetupPanelTest {
         startConversation()
         showing("Get Ollama")
         shot("setup-install")
-        onNodeWithText("Close").performClick()
+        onNodeWithText("Cancel").performClick()
         waitUntil(timeoutMillis = 5_000) { state.setup == null }
         state.close()
     }
@@ -140,12 +140,12 @@ class SetupPanelTest {
         val state = open(OllamaSetup(url, emptyList()))
         startConversation()
         showing("Choose a model")
-        onRoot().performKeyInput { pressKey(Key.Escape) }
+        topRoot().performKeyInput { pressKey(Key.Escape) }
         waitUntil(timeoutMillis = 5_000) { state.setup == null }
 
         startConversation()
         showing("Choose a model")
-        onRoot().performKeyInput { pressKey(Key.Enter) }
+        topRoot().performKeyInput { pressKey(Key.Enter) }
         waitUntil(timeoutMillis = 10_000) { state.conversations.size == 1 }
         assertEquals("gemma3:1b", state.conversations.single().agent?.model)
         state.close()

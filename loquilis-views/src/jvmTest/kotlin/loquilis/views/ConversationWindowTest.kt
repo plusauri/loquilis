@@ -38,7 +38,7 @@ class ConversationWindowTest {
 
     private fun ComposeUiTest.shot(name: String) {
         val dir = File("build/review-shots").apply { mkdirs() }
-        ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(dir, "$name.png"))
+        ImageIO.write(windowShot(), "png", File(dir, "$name.png"))
     }
 
     private fun ComposeUiTest.showing(text: String, substring: Boolean = false) {

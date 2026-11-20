@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 19
-    const val LAST_CHANGE = "Name a conversation as you create it"
+    private const val PATCH = 20
+    const val LAST_CHANGE = "Dialogs are the kit's resizable dialog; setup has Back and Cancel"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 

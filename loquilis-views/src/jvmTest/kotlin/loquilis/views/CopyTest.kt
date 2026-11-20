@@ -91,8 +91,8 @@ class CopyTest {
         }
         waitForIdle()
         val folder = File("build/review-shots").apply { mkdirs() }
-        ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(folder, "selected-message.png"))
-        onRoot().performKeyInput {
+        ImageIO.write(windowShot(), "png", File(folder, "selected-message.png"))
+        topRoot().performKeyInput {
             val command = if (System.getProperty("os.name").startsWith("Mac")) Key.MetaLeft else Key.CtrlLeft
             keyDown(command)
             keyDown(Key.C)

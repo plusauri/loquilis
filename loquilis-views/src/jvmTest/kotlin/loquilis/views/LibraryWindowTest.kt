@@ -79,7 +79,7 @@ class LibraryWindowTest {
 
     private fun ComposeUiTest.shot(name: String) {
         val folder = File("build/review-shots").apply { mkdirs() }
-        ImageIO.write(onRoot().captureToImage().toAwtImage(), "png", File(folder, "$name.png"))
+        ImageIO.write(windowShot(), "png", File(folder, "$name.png"))
     }
 
     @Test fun aConversationStartsSendsAndAnswersInTheWindow() = runDesktopComposeUiTest(1100, 700) {
@@ -323,7 +323,7 @@ class LibraryWindowTest {
         waitForIdle()
         onNodeWithText("Message").performClick()
         waitForIdle()
-        onRoot().performKeyInput {
+        topRoot().performKeyInput {
             keyDown(Key.MetaLeft)
             keyDown(Key.ShiftLeft)
             pressKey(Key.Backspace)
@@ -332,7 +332,7 @@ class LibraryWindowTest {
         }
         waitForIdle()
         assertEquals(state.currentId, state.deleting?.id)
-        onRoot().performKeyInput { pressKey(Key.Escape) }
+        topRoot().performKeyInput { pressKey(Key.Escape) }
         waitForIdle()
         assertNull(state.deleting)
         state.close()

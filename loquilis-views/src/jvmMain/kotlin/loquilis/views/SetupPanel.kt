@@ -1,6 +1,9 @@
 package loquilis.views
 
 import plusauri.ui.ActionKind
+import plusauri.ui.DialogConfirmButton
+import plusauri.ui.DialogDismissButton
+import androidx.compose.ui.input.key.Key
 import plusauri.ui.ActionPill
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -131,7 +134,7 @@ class SetupState(
  * is where each conversation's model is chosen. Return starts with the first, Escape closes.
  */
 @Composable
-internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onStart: (model: String) -> Unit) {
+internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onBack: () -> Unit, onStart: (model: String) -> Unit) {
     val palette = LocalPalette.current
     val scope = rememberCoroutineScope()
     val runner = setup.runner
@@ -144,9 +147,31 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onStart: (model:
         }
     }
 
-    Modal(onDismiss = { if (setup.pulling == null) onClose() }, width = 460.dp) {
-        val ready = runner is RunnerState.Ready && setup.installed.isNotEmpty()
-        Text(if (ready) "Choose a model" else "Set up a model on this computer", color = palette.ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    val ready = runner is RunnerState.Ready && setup.installed.isNotEmpty()
+    ConsoleDialog(
+        if (ready) "Choose a model" else "Set up a model on this computer",
+        // A download keeps the dialog: Cancel download is the way out of it.
+        onDismiss = { if (setup.pulling == null) onClose() },
+        width = 480.dp,
+        keys = { key ->
+            val first = setup.installed.firstOrNull()
+            (key == Key.Enter && first != null && setup.pulling == null).also { if (it) onStart(first!!) }
+        },
+        footer = {
+            if (setup.pulling != null) {
+                DialogDismissButton("Cancel download", onClick = { setup.cancel() })
+            } else {
+                // Back to the new-conversation card, its agent and name as they were; Cancel leaves it all.
+                DialogDismissButton("Back", onClick = onBack)
+                DialogDismissButton("Cancel", onClick = onClose)
+                when (runner) {
+                    RunnerState.NotInstalled -> if (!setup.offlineOnly) DialogConfirmButton("Get Ollama", onClick = { openInBrowser(OllamaSetup.DOWNLOAD_PAGE) })
+                    RunnerState.NotRunning -> DialogConfirmButton("Start Ollama", onClick = { setup.start() })
+                    else -> {}
+                }
+            }
+        },
+    ) {
         if (setup.toolsOnly) DataGoesLine(DataGoes.ModelHere, "The model runs on this computer. Its tools reach the network only when you allow them.")
         else DataGoesLine(DataGoes.StaysHere, "What you write here stays on this computer.")
         when (runner) {
@@ -179,18 +204,6 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onStart: (model:
             Note("Ollama may show its own welcome the first time. You can close it. Signing in is not needed for models on this computer.")
         }
         setup.problem?.let { Text(it, color = palette.failed, fontSize = 12.sp) }
-        Buttons {
-            if (setup.pulling != null) {
-                ActionPill("Cancel download", ActionKind.Clear, onClick = { setup.cancel() })
-            } else {
-                ActionPill("Close", ActionKind.Clear, onClick = onClose)
-                when (runner) {
-                    RunnerState.NotInstalled -> if (!setup.offlineOnly) ActionPill("Get Ollama", ActionKind.Go, onClick = { openInBrowser(OllamaSetup.DOWNLOAD_PAGE) })
-                    RunnerState.NotRunning -> ActionPill("Start Ollama", ActionKind.Run, onClick = { setup.start() })
-                    else -> {}
-                }
-            }
-        }
     }
 }
 
