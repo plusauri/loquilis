@@ -25,6 +25,12 @@ interface Store : BlobSink, AutoCloseable {
     fun conversation(id: String): Conversation?
     fun conversations(limit: Int, offset: Int = 0): List<Conversation>
 
+    /**
+     * Gives a conversation a new [title], touching nothing else, so a rename never undoes what a running agent
+     * writes to the same row and the list keeps its order.
+     */
+    fun renameConversation(id: String, title: String)
+
     /** Removes a conversation and all that was recorded for it, and any blob nothing else uses. It cannot be undone. */
     fun deleteConversation(id: String)
 

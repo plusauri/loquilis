@@ -399,6 +399,10 @@ class SqliteStore private constructor(
         }
     }
 
+    override fun renameConversation(id: String, title: String) {
+        write("UPDATE conversation SET title = ? WHERE id = ?", title.trim(), id)
+    }
+
     override fun deleteConversation(id: String) {
         val orphanFiles = transaction {
             val used = buildSet { forEachEntry(id) { entry -> blobsOf(entry).forEach { add(it.sha256) } } }

@@ -8,6 +8,7 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -302,6 +303,37 @@ class LibraryWindowTest {
         waitForIdle()
         assertEquals(listOf(first), state.conversations.map { it.id })
         assertEquals(first, state.currentId)
+        state.close()
+    }
+
+    @Test fun renameGivesTheShowingConversationANewName() = runDesktopComposeUiTest(1100, 700) {
+        val state = open(answers)
+        startConversation()
+        waitForIdle()
+        val id = state.currentId!!
+
+        onNodeWithText("Rename").performClick()
+        showing("Rename “New conversation”")
+        val box = onAllNodes(hasSetTextAction()).onLast()
+        box.performTextInput("Release notes")
+        shot("rename")
+        box.performKeyInput { pressKey(Key.Enter) }
+        waitUntil(timeoutMillis = 5_000) { store.conversation(id)?.title == "Release notes" }
+        waitForIdle()
+        assertNull(state.renaming)
+        assertEquals(2, onAllNodesWithText("Release notes").fetchSemanticsNodes().size, "the list and the title both read it")
+
+        // A blank name is not a name: Rename waits, and Cancel leaves the old one.
+        state.perform(ConsoleAction.RenameConversation)
+        waitForIdle()
+        state.newTitle = "  "
+        waitForIdle()
+        onAllNodes(hasSetTextAction()).onLast().performKeyInput { pressKey(Key.Enter) }
+        waitForIdle()
+        assertTrue(state.renaming != null, "Return with no name leaves the dialog up")
+        onNodeWithText("Cancel").performClick()
+        waitForIdle()
+        assertEquals("Release notes", store.conversation(id)?.title)
         state.close()
     }
 

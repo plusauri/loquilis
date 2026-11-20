@@ -162,6 +162,41 @@ class LibraryState(
     var newConversationAsked by mutableStateOf(0)
         private set
 
+    /** The conversation being renamed while the rename dialog shows, or null when it does not. */
+    var renaming by mutableStateOf<Conversation?>(null)
+        private set
+
+    /** What is typed in the rename dialog. */
+    var newTitle by mutableStateOf("")
+
+    /** Opens the rename dialog on [conversation], with its name as it reads now. */
+    fun startRenaming(conversation: Conversation) {
+        newTitle = conversation.title
+        renaming = conversation
+    }
+
+    fun cancelRename() {
+        renaming = null
+    }
+
+    /**
+     * Names the conversation being renamed [newTitle]. A blank name changes nothing: the first message has already
+     * named it, so there is nothing left to fall back to.
+     */
+    suspend fun rename() {
+        val conversation = renaming ?: return
+        val title = newTitle.trim()
+        renaming = null
+        if (title.isEmpty() || title == conversation.title) return
+        val showing = current?.takeIf { it.pager.conversationId == conversation.id }
+        val refreshed = withContext(Dispatchers.IO) {
+            store.renameConversation(conversation.id, title)
+            showing?.let { runCatching { it.pager.refreshed() }.getOrNull() }
+        }
+        refreshed?.let { showing?.show(it) }
+        refreshList()
+    }
+
     /** The conversation waiting on the user to confirm its deletion. */
     var deleting by mutableStateOf<Conversation?>(null)
 
@@ -202,6 +237,7 @@ class LibraryState(
     fun perform(action: ConsoleAction) {
         when (action) {
             ConsoleAction.DeleteConversation -> deleting = conversations.firstOrNull { it.id == currentId }
+            ConsoleAction.RenameConversation -> conversations.firstOrNull { it.id == currentId }?.let(::startRenaming)
             ConsoleAction.ToggleConversationList -> listPanel.toggle()
             ConsoleAction.ToggleInspector -> inspectorPanel.toggle()
             // Opening the card needs the host, which LibraryWindow brings; see newConversationAsked.

@@ -11,6 +11,7 @@ import androidx.compose.ui.input.key.key
 /** What a console can be told to do, by name, so a key, a button or a menu can all ask for the same thing. */
 enum class ConsoleAction(val label: String) {
     NewConversation("New conversation"),
+    RenameConversation("Rename conversation"),
     DeleteConversation("Delete conversation"),
     ToggleConversationList("Show or hide the conversation list"),
     ToggleInspector("Show or hide the inspector"),

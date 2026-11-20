@@ -162,7 +162,7 @@ internal fun SetupPanel(setup: SetupState, onClose: () -> Unit, onBack: () -> Un
                 DialogDismissButton("Cancel download", onClick = { setup.cancel() })
             } else {
                 // Back to the new-conversation card, its agent and name as they were; Cancel leaves it all.
-                DialogDismissButton("Back", onClick = onBack)
+                DialogDismissButton("← Back", onClick = onBack)
                 DialogDismissButton("Cancel", onClick = onClose)
                 when (runner) {
                     RunnerState.NotInstalled -> if (!setup.offlineOnly) DialogConfirmButton("Get Ollama", onClick = { openInBrowser(OllamaSetup.DOWNLOAD_PAGE) })

@@ -65,6 +65,18 @@ class SqliteStoreTest {
     }
 
     @Test
+    fun aRenameChangesOnlyTheTitleAndLasts() {
+        val before = recorded(path).use { store ->
+            val before = checkNotNull(store.conversation(CONVERSATION))
+            store.renameConversation(CONVERSATION, "  Release notes  ")
+            before
+        }
+        SqliteStore.open(path).use { store ->
+            assertEquals(before.copy(title = "Release notes"), store.conversation(CONVERSATION))
+        }
+    }
+
+    @Test
     fun entriesSurviveClosingAndReopening() {
         val before = recorded(path).use { it.allEntries() }
         SqliteStore.open(path).use { assertEquals(before, it.allEntries()) }

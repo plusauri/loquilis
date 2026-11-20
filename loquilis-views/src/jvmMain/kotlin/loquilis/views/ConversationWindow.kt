@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,12 +39,14 @@ import loquilis.store.modelInUse
 
 /**
  * One conversation from a library: three views of it, and the inspector showing the selected entry.
- * [composer] sits under the views that show the conversation, for a host that can talk to the agent.
+ * [composer] sits under the views that show the conversation, for a host that can talk to the agent, and
+ * [titleActions] beside its title, for what a host can do to the conversation itself (Rename, in the console).
  */
 @Composable
 fun ConversationWindow(
     state: ConversationState,
     inspector: PanelState = remember { PanelState(true, ConsoleSettings.INSPECTOR_WIDTH.dp, INSPECTOR_MIN, INSPECTOR_MAX) },
+    titleActions: @Composable RowScope.() -> Unit = {},
     composer: @Composable () -> Unit = {},
 ) {
     val palette = LocalPalette.current
@@ -52,7 +55,7 @@ fun ConversationWindow(
     val treeList = remember(conversationId) { LazyListState() }
 
     Column(Modifier.fillMaxSize().background(palette.page)) {
-        TopBar(state)
+        TopBar(state, titleActions)
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -71,7 +74,7 @@ fun ConversationWindow(
 }
 
 @Composable
-private fun TopBar(state: ConversationState) {
+private fun TopBar(state: ConversationState, titleActions: @Composable RowScope.() -> Unit) {
     val palette = LocalPalette.current
     Column {
         Row(
@@ -79,7 +82,10 @@ private fun TopBar(state: ConversationState) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column {
-                Text(state.pager.conversation.title.ifEmpty { NEW_CONVERSATION }, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = palette.ink)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(state.pager.conversation.title.ifEmpty { NEW_CONVERSATION }, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = palette.ink)
+                    titleActions()
+                }
                 Text(summaryLine(state.pager), fontSize = 12.sp, color = palette.muted)
             }
             Spacer(Modifier.weight(1f))

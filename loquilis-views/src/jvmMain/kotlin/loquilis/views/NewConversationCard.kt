@@ -92,13 +92,22 @@ internal fun NewConversationCard(state: LibraryState, onCreate: (agent: String) 
  */
 @Composable
 private fun NameBox(state: LibraryState) {
+    NameField(state.newName, { state.newName = it }, placeholder = "Optional. Otherwise named from your first message")
+}
+
+/**
+ * A conversation's name, in the box the new-conversation and rename dialogs share. It takes the keys as it opens,
+ * so a person can type and press Return, and it keeps to one line.
+ */
+@Composable
+internal fun NameField(value: String, onValueChange: (String) -> Unit, placeholder: String = "") {
     val palette = LocalPalette.current
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
     LabeledField("Name") {
         BasicTextField(
-            value = state.newName,
-            onValueChange = { state.newName = it.replace("\n", " ") },
+            value = value,
+            onValueChange = { onValueChange(it.replace("\n", " ")) },
             singleLine = true,
             textStyle = TextStyle(color = palette.ink, fontSize = 13.sp),
             cursorBrush = SolidColor(palette.ink),
@@ -110,7 +119,7 @@ private fun NameBox(state: LibraryState) {
                 .padding(horizontal = 10.dp, vertical = 7.dp),
             decorationBox = { field ->
                 Box {
-                    if (state.newName.isEmpty()) Text("Optional. Otherwise named from your first message", color = palette.muted, fontSize = 13.sp)
+                    if (value.isEmpty()) Text(placeholder, color = palette.muted, fontSize = 13.sp)
                     field()
                 }
             },

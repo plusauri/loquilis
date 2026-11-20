@@ -143,6 +143,9 @@ fun LibraryWindow(
             }
         }
         if (state.showingSettings) SettingsCard(state) { state.showingSettings = false }
+        state.renaming?.let { conversation ->
+            RenameDialog(conversation, state, onCancel = state::cancelRename) { scope.launch { state.rename() } }
+        }
         state.deleting?.let { conversation ->
             ConfirmDelete(conversation, onCancel = { state.deleting = null }) { scope.launch { state.confirmDelete() } }
         }
@@ -179,6 +182,23 @@ internal fun ConsoleDialog(
             content = content,
         )
         footer?.let { DialogFooter(content = it) }
+    }
+}
+
+/** A new name for [conversation]. Return renames; a blank name cannot be given, so Rename waits for one. */
+@Composable
+private fun RenameDialog(conversation: Conversation, state: LibraryState, onCancel: () -> Unit, onRename: () -> Unit) {
+    val named = state.newTitle.isNotBlank()
+    ConsoleDialog(
+        "Rename “${conversation.shownTitle}”",
+        onDismiss = onCancel,
+        keys = { key -> (key == Key.Enter && named).also { if (it) onRename() } },
+        footer = {
+            DialogDismissButton("Cancel", onClick = onCancel)
+            DialogConfirmButton("Rename", onClick = onRename, enabled = named)
+        },
+    ) {
+        NameField(state.newTitle, { state.newTitle = it })
     }
 }
 
@@ -221,7 +241,18 @@ private fun Library(state: LibraryState, brand: Brand?, onNewConversation: () ->
             }
         } else {
             key(id) { Follow(state, showing, id) }
-            ConversationWindow(showing, state.inspectorPanel) { key(id) { Composer(state, id) } }
+            ConversationWindow(
+                showing,
+                state.inspectorPanel,
+                titleActions = {
+                    ActionPill(
+                        "Rename",
+                        ActionKind.Go,
+                        onClick = { state.perform(ConsoleAction.RenameConversation) },
+                        density = ActionPillDensity.Thin,
+                    )
+                },
+            ) { key(id) { Composer(state, id) } }
         }
     }
 }
