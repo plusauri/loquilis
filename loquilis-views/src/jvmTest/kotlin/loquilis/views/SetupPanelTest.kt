@@ -66,7 +66,14 @@ class SetupPanelTest {
     }
 
     private fun ComposeUiTest.open(setup: OllamaSetup): LibraryState {
-        val state = LibraryState(store, mapOf("local" to LocalChatAgent(store, url)), setups = mapOf("local" to setup))
+        val state = LibraryState(
+            store,
+            mapOf("local" to LocalChatAgent(store, url)),
+            setups = mapOf("local" to setup),
+            // A 16 GB computer with room to spare, whatever runs the test: what is suggested depends on it.
+            memoryGb = { 16.0 },
+            freeDiskGb = { 500.0 },
+        )
         setContent { ReviewTheme { LibraryWindow(state) { agent, model -> state.newConversation(dir, agent, model) } } }
         waitForIdle()
         return state

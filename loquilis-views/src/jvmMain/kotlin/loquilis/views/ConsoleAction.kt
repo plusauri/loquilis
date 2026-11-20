@@ -17,7 +17,11 @@ enum class ConsoleAction(val label: String) {
     ToggleInspector("Show or hide the inspector"),
 }
 
-/** A key and what is held with it. */
+/**
+ * A key and what is held with it. [command] is the platform's command key: Command on a Mac, Control elsewhere,
+ * so one table gives Command-N on a Mac and Ctrl-N on Windows and Linux. [control] is the Control key on a Mac
+ * only, where it is a key of its own.
+ */
 data class KeyChord(
     val key: Key,
     val command: Boolean = false,
@@ -35,5 +39,15 @@ val DefaultKeys: KeyBindings = mapOf(
     KeyChord(Key.Backspace, command = true, shift = true) to ConsoleAction.DeleteConversation,
 )
 
-internal fun KeyBindings.actionFor(event: KeyEvent): ConsoleAction? =
-    this[KeyChord(event.key, event.isMetaPressed, event.isShiftPressed, event.isCtrlPressed, event.isAltPressed)]
+internal fun KeyBindings.actionFor(event: KeyEvent): ConsoleAction? = this[event.chord(onMac)]
+
+/** The chord [this] is, with the command key read as [mac] says. */
+internal fun KeyEvent.chord(mac: Boolean): KeyChord = KeyChord(
+    key = key,
+    command = if (mac) isMetaPressed else isCtrlPressed,
+    shift = isShiftPressed,
+    control = mac && isCtrlPressed,
+    option = isAltPressed,
+)
+
+private val onMac: Boolean = System.getProperty("os.name").orEmpty().startsWith("Mac")

@@ -37,6 +37,9 @@ class LibraryState(
     private val onSettings: (ConsoleSettings) -> Unit = {},
     /** The networks this computer is joined to, read before every send while offline only is on. */
     private val networks: () -> List<String> = ::joinedNetworks,
+    /** This computer's memory and free disk, which decide the models a setup suggests. */
+    private val memoryGb: () -> Double = OllamaSetup::installedMemoryGb,
+    private val freeDiskGb: () -> Double = OllamaSetup::freeDiskGb,
 ) {
     constructor(store: Store, agent: Agent, first: String? = null, now: () -> Instant = { java.time.Instant.now() }) :
         this(store, mapOf(DEFAULT_AGENT to agent), first, now)
@@ -147,7 +150,7 @@ class LibraryState(
      */
     suspend fun prepare(agent: String): Boolean {
         val needed = setups[agent] ?: return true
-        val shown = SetupState(agent, needed, lastUsed = lastModel(agent), offlineOnly = offlineOnly, toolsOnly = agents[agent]?.modelNeedsTools == true)
+        val shown = SetupState(agent, needed, memoryGb = memoryGb(), freeDiskGb = freeDiskGb, lastUsed = lastModel(agent), offlineOnly = offlineOnly, toolsOnly = agents[agent]?.modelNeedsTools == true)
         setup = shown
         shown.refresh()
         return false
