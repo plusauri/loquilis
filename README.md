@@ -30,7 +30,19 @@ Loquilis depends on nothing in Tutilis, though it is designed to serve Tutilis's
 
 ## Status
 
-Early. The repository is private while the model and the library take shape, and it will go public once the library is usable on its own. Until then, nothing here is a stable API.
+Early. The model, the storage and the views work, but nothing here is a stable API yet: a module's shape can change from one commit to the next.
+
+## Building and running
+
+You need JDK 17 or newer. No account or token is needed: every dependency, the ui-kit included, comes from Maven Central.
+
+```
+./gradlew :loquilis-model:jvmTest :loquilis-agents:jvmTest :loquilis-store:jvmTest :loquilis-views:jvmTest :app:jvmTest
+scripts/run-loquilis.sh --sample     # the bundled sample conversation
+scripts/run-loquilis.sh              # your own library of conversations
+```
+
+Sending a message runs the agent's own command-line tool, so `claude` (or `grok`) must be installed and signed in. A local model needs a runner such as Ollama.
 
 Loquilis is made by [Plusauri](https://www.plusauri.com), the makers of Tutilis.
 
