@@ -7,11 +7,11 @@ plugins {
 }
 
 /**
- * The ui-kit release this build uses (GitHub Packages, `plusauri/ui-kit`; settings.gradle.kts). Raising it is
+ * The ui-kit release this build uses (Maven Central, `com.plusauri:ui-kit`; settings.gradle.kts). Raising it is
  * how a kit change reaches Loquilis: release the kit (a `v<version>` tag there), then change this line. A kit
  * checkout included from source (`PLUSAURI_UI_KIT_DIR`) wins over it.
  */
-val UI_KIT_VERSION = "0.5.0"
+val UI_KIT_VERSION = "0.6.0"
 
 kotlin {
     // Desktop only for now: the store's one implementation is JVM.
