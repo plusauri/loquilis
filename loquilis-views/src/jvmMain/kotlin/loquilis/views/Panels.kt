@@ -39,7 +39,7 @@ class PanelState(
 }
 
 /**
- * The seam beside [panel], the kit's panel seam as Tutilis draws beside its own side panels: a click folds or
+ * The seam beside [panel], the kit's panel seam: a click folds or
  * opens it, a drag sizes it. [name] finishes the hover tip, "Hide the [name]".
  */
 @Composable

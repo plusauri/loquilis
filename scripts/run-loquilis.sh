@@ -5,8 +5,8 @@
 #
 # Usage:
 #   scripts/run-loquilis.sh                  # the default library, where chats are kept
-#   scripts/run-loquilis.sh --sample         # the bundled take
-#   scripts/run-loquilis.sh <take folder>    # a folder holding conversation.json and raw.jsonl.gz
+#   scripts/run-loquilis.sh --sample         # the bundled sample, a recorded session
+#   scripts/run-loquilis.sh <take folder>    # a recorded session: a folder holding conversation.json and raw.jsonl.gz
 #   scripts/run-loquilis.sh <library.sqlite> # a library, opened as it is
 
 set -euo pipefail
@@ -14,7 +14,7 @@ set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ $# -gt 1 ]]; then
-  echo "usage: run-loquilis.sh [--sample | take folder | library file]" >&2
+  echo "usage: run-loquilis.sh [--sample | take folder (conversation.json + raw.jsonl.gz) | library.sqlite]" >&2
   exit 2
 fi
 

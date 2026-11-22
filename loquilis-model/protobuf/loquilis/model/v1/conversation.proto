@@ -29,7 +29,7 @@ message Conversation {
   // Which parser turned the raw events into entries. A parser fix names the records it would change.
   ParserRef parser = 10;
   // Data from apps built on Loquilis. Loquilis stores and round-trips these without reading them.
-  // Each is a message from the extending app's own .proto, e.g. tutilis.cogilis.v1.TakeExt.
+  // Each is a message from the extending app's own .proto, e.g. com.example.myapp.v1.ConversationNote.
   repeated Extension extensions = 15;
 }
 

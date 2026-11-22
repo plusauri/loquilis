@@ -19,8 +19,9 @@ import loquilis.model.TextRole
 import loquilis.model.ToolKind
 
 /**
- * The proof behind decision 0001: a real Cogilis take, replayed from its raw stream, has everything
- * the Cogilis recorder found in it. `conversation.json` is the statement of what must be there.
+ * The proof behind decision 0001: a real Cogilis take (see the README's "Terms"), replayed from its raw
+ * stream, has everything the recorder that made `conversation.json` found in it. `conversation.json` is
+ * the statement of what must be there.
  */
 class ClaudeParityTest {
     private val replayed = replayFixture()
@@ -84,7 +85,7 @@ class ClaudeParityTest {
         else -> error("not a step")
     }
 
-    /** Each call's result: the error flag, and the output, whose first lines Cogilis kept inline. */
+    /** Each call's result: the error flag, and the output, whose first lines the recorder kept inline. */
     @Test fun everyCommandHasItsOutput() {
         var checked = 0
         Fixture.turns.forEachIndexed { i, turn ->
@@ -137,7 +138,7 @@ class ClaudeParityTest {
         assertEquals(1, entries.count { it.parent_id.isEmpty() })
     }
 
-    /** A second run over the same raw lines gives the same record. This is what `reparse` relies on. */
+    /** A second run over the same raw lines gives the same record. This is what `recover` relies on. */
     @Test fun parsingIsRepeatable() {
         assertEquals(replayed.log.entries, replayFixture().log.entries)
     }

@@ -42,7 +42,7 @@ import okio.ByteString
  */
 public class Extension(
   /**
-   * Identifies the message, e.g. "type.googleapis.com/tutilis.cogilis.v1.TurnExt".
+   * Identifies the message, e.g. "type.googleapis.com/com.example.myapp.v1.TurnNote".
    */
   @field:WireField(
     tag = 1,

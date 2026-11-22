@@ -15,7 +15,7 @@ option java_package = "loquilis.model";
 // base64 that any reader can carry. The cost is that an export shows an extension as base64 rather
 // than as readable fields.
 message Extension {
-  // Identifies the message, e.g. "type.googleapis.com/tutilis.cogilis.v1.TurnExt".
+  // Identifies the message, e.g. "type.googleapis.com/com.example.myapp.v1.TurnNote".
   string type_url = 1;
   // The encoded message.
   bytes value = 2;

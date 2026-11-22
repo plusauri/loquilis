@@ -26,8 +26,8 @@ import loquilis.views.LibraryWindow
 import loquilis.views.ReviewTheme
 
 /**
- * Opens the default library, or what the first argument names: a library file, a take folder, or
- * `--sample` for the bundled take.
+ * Opens the default library, or what the first argument names: a library file, a take folder (one recorded
+ * session, `conversation.json` and `raw.jsonl.gz`), or `--sample` for the bundled take.
  */
 fun main(args: Array<String>) {
     // Gradle passes this as true to what it starts, which keeps a Mac app out of the Dock and Cmd-Tab.

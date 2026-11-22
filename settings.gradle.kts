@@ -29,8 +29,7 @@ include(":app")
 /**
  * The general controls come from the ui-kit, `plusauri/ui-kit` (package `plusauri.ui`), released to Maven
  * Central and read with no token. `:loquilis-views` names the version it uses (`com.plusauri:ui-kit`, in its
- * build file). The kit
- * depends on Compose only, so it sits outside the rule that Loquilis depends on nothing in Tutilis
+ * build file). The kit depends on Compose only. It is the one dependency on another Plusauri project
  * (`doc/decisions/0001-dependency-direction.md`).
  *
  * **Working on the kit.** Set the Gradle property `plusauri.uiKitDir`, or the env var `PLUSAURI_UI_KIT_DIR`,

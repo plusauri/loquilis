@@ -10,7 +10,7 @@ import loquilis.store.SqliteStore
 import loquilis.store.Store
 import loquilis.store.recordTake
 
-/** The bundled take is opened by this instead of a path. */
+/** The bundled take, a recorded agent session (see the README's "Terms"), is opened by this instead of a path. */
 const val SAMPLE = "--sample"
 
 /** A library opened for the window, and the conversation to show first, if it has one. */
@@ -31,8 +31,9 @@ fun openArgument(argument: String?, defaultLibrary: Path = defaultLibraryPath())
 }
 
 /**
- * [source] names a library file, opened as it is, or a take folder. A take, or the bundled take when
- * there is no [source], is recorded into a scratch library that lasts as long as the window.
+ * [source] names a library file, opened as it is, or a take folder (`conversation.json` and `raw.jsonl.gz`).
+ * A take, or the bundled take when there is no [source], is recorded into a scratch library that lasts as long
+ * as the window.
  */
 fun openLibrary(source: Path?): OpenedLibrary {
     if (source != null && source.isRegularFile()) return openFile(source)

@@ -1,7 +1,8 @@
 # Conversation model and storage
 
-- Status: **accepted in shape** 2026-11-03 (Dan). The protos are in `loquilis-model/protobuf/loquilis/model/v1/`, `loquilis-model` and `loquilis-agents` (Claude) are built and tested. `loquilis-store` and `loquilis-views` are built and tested. `LiveChat` records a running agent, and `app` is a thin window for talking to one, over the default library, another library, or a recorded take.
+- Status: **accepted in shape** 2026-11-03. The protos are in `loquilis-model/protobuf/loquilis/model/v1/`. All five modules are built and tested. The agents are Claude Code, Grok, OpenCode with a local model, and plain chat with a local model; local models and Offline only are covered in `doc/decisions/0003-open-models-and-where-data-goes.md`. `LiveChat` records a running agent, and `app` is a thin window for talking to one, over the default library, another library, or a recorded take.
 - Rule this works under: `doc/decisions/0001-dependency-direction.md` (no dependency on Tutilis).
+- Terms: Tutilis, Cogilis and a *take* are defined in the README's "Terms" section.
 
 ## What the model has to do
 
@@ -21,9 +22,11 @@ Loquilis records conversations with coding agents and shows them in several view
 | L8 | Many agents | One adapter per agent, each normalizing its stream into the same entries. Claude and Grok hold a live session on stdin; Codex may resume one process per turn. |
 | L9 | A library others build on, from other languages too | Core types stay small and general, and they are defined in a language-neutral schema. Bespoke data goes in typed extensions. |
 
-### Tutilis's needs, read from `:cogilis-records` (schema 1)
+### An embedding app's needs (Tutilis)
 
-These are requirements, not code. A Cogilis take must import into Loquilis with nothing lost.
+Tutilis is the first app these needs come from. Its record format for Cogilis takes (`conversation.json`, schema 1) lives in Tutilis's private repo, and was read as a list of requirements, not as code. A Cogilis take must import into Loquilis with nothing lost.
+
+Some Tutilis terms in the table: the *door* is how the agent was reached (`cli` in the fixture), a *beat* is one step of a lesson's script, and `calc/` is the folder where a take keeps each command's full output. The other T9 fields are Tutilis's own, and Loquilis only has to carry them.
 
 | # | Cogilis has | Loquilis provides it as |
 |---|---|---|
@@ -35,16 +38,16 @@ These are requirements, not code. A Cogilis take must import into Loquilis with 
 | T6 | Turn duration, cost, agent turn count, error flag | `TurnResult`. |
 | T7 | Attachments (a plan file sent with a message) | `UserMessage.attachments`. |
 | T8 | Figures and answer files | **`Artifact`** (core): `ARTIFACT_KIND_IMAGE` / `HTML` / `FILE`, with `workspace_path`, `produced_by_call_id`, and `change`. |
-| T9 | Engine calls, disclaimer flag, emotion, beat id, asks-for, character, lesson, plan, script, panel, door | **Extensions**: messages in Tutilis's own `.proto` (`tutilis.cogilis.v1.*`), held in `Extension`. None of them is core. |
+| T9 | Engine calls, disclaimer flag, emotion, beat id, asks-for, character, lesson, plan, script, panel, door | **Extensions**: messages in Tutilis's own `.proto`, held in `Extension`. None of them is core. |
 | T10 | A `schema` version and tolerant reads | Protobuf evolution rules, `buf breaking`, and `ExportManifest.schema`. |
 | T11 | Derived renderings (`transcript.md`, player timeline) are pure functions over the record | The views and exporters read through the same model API, and nothing derived is stored as truth. |
 | T12 | Thinking blocks are dropped, because Cogilis records are public | Loquilis keeps thinking as `Thinking` with `VISIBILITY_PRIVATE`. It is hidden by default and dropped by exports unless asked for. In the recorded streams, most thinking blocks are empty (a signature only), and those make no entry. |
 
 ## Modeling: protobuf is the source of truth
 
-As in Tutilis, the model is **defined in `.proto` files** and Kotlin is generated from them by Wire. A thin hand-written Kotlin layer adds the conveniences, and the database is the stored side. The reasons:
+The model is **defined in `.proto` files** and Kotlin is generated from them by Wire. A thin hand-written Kotlin layer adds the conveniences, and the database is the stored side. The reasons:
 
-- **Other languages can take part.** The same files generate TypeScript (a web viewer, the Cogilis player), Python (analysis scripts), Swift and Go, with no second hand-written model to drift.
+- **Other languages can take part.** The same files generate TypeScript (a web viewer, or a player that replays a recorded conversation), Python (analysis scripts), Swift and Go, with no second hand-written model to drift.
 - **The data lasts for years.** Conversations live in libraries and in git records repos. Protobuf's rules (never reuse a field number, mark retired fields `reserved`, add fields freely) are the discipline that kind of data needs.
 - **Extensions are typed and travel across languages.** An app built on Loquilis defines its own messages and attaches them as `Extension` (a type URL and the encoded bytes). Loquilis stores them and round-trips them without reading them, and any language that has the extending app's `.proto` can decode them.
 
@@ -86,7 +89,7 @@ All in `loquilis-model/protobuf/loquilis/model/v1/`, package `loquilis.model.v1`
 
 The first draft used `Any`. A test found the flaw: proto3-JSON writes an `Any` by expanding it, which needs the message's descriptor, so a reader without the type cannot write it at all. A plain Loquilis exporting a conversation that carries another app's data would fail, and the same rule binds every language's JSON library. `Extension` has `Any`'s field numbers, so its binary form is identical (`ExtensionsTest` pins this), and in JSON its value is base64 that any reader can carry.
 
-**The cost:** an export shows an extension as base64, not as readable fields, so a git diff of a records repo will not show a change inside one. An app that wants readable records can write them out itself, knowing its own types, as Cogilis already writes `transcript.md`.
+**The cost:** an export shows an extension as base64, not as readable fields, so a git diff of a records repo will not show a change inside one. An app that wants readable records can write them out itself, knowing its own types, for example as a Markdown transcript.
 
 ### Modeling conventions
 
@@ -104,25 +107,25 @@ Wire generates immutable classes. The hand-written layer is small, and it lives 
 - **A sealed view over `EntryBody`.** Wire represents a `oneof` as nullable fields, so the layer adds `val EntryBody.kind: EntryKind`, which lets code use an exhaustive `when`. `EntryKind.Unknown` is a real case: a kind from a newer schema decodes to it and keeps its bytes. `AppCommand.kind` does the same for commands.
 - **Typed extension access.** `ExtensionKey<M>` gives `entry.ext(key)` and `entry.withExt(key, value)` over the `Extension` list.
 - **Id value classes and a ULID factory.**
-- **`Content` helpers**, such as `textOrNull()` and `isStored`.
+- **`Content` helpers:** `inlineContent` and `storedContent` to make one, `isStored`, and `preview` (the whole text if inline, otherwise its head).
 
-Domain logic goes in extension functions, not in wrapper classes, as in Tutilis. The generated Kotlin is committed, as in Tutilis's `:modeling`, so a schema change shows up in review as a code diff.
+Domain logic goes in extension functions, not in wrapper classes. The generated Kotlin is committed, so a schema change shows up in review as a code diff. CI regenerates it and fails if it differs from what is committed.
 
 ### Schema discipline
 
-- `buf lint` (STANDARD rules) and `buf breaking` against `main` (WIRE_JSON: breaking either the binary or the JSON form fails) run in CI. The config is in `buf.yaml`. CI is `.github/workflows/ci.yml`.
+- CI runs `buf lint` (STANDARD rules) and `buf breaking` (WIRE_JSON: breaking either the binary or the JSON form fails). On a pull request, `buf breaking` compares against the pull request's base branch. On a push to `main`, it compares against the previous push. The config is in `buf.yaml`, and CI is `.github/workflows/ci.yml`.
 - Field numbers are never reused, and a retired field is marked `reserved`, with its name.
 - A change that alters how entries are parsed from the same raw events bumps `ParserRef.version`. A change to the export layout bumps `ExportManifest.schema`.
 
 ## Raw events are the truth
 
-Every line an agent emits is stored verbatim in the agent's own format, compressed in blocks. These lines are not protobuf on purpose: they are what the protos are parsed *from*. Entries name the raw lines they came from (`RawRange`). If a parser is wrong, or an agent's format changes, the entries can be rebuilt from raw events (`reparse`), and `ParserRef` says which records a parser fix would change.
+Every line an agent emits is stored verbatim in the agent's own format, compressed in blocks. These lines are not protobuf on purpose: they are what the protos are parsed *from*. Entries name the raw lines they came from (`RawRange`). If a parser is wrong, or an agent's format changes, the entries can be rebuilt from raw events (`recover`, in `Recorder.kt`), and `ParserRef` says which records a parser fix would change.
 
 ## Storage
 
-**One SQLite library file** holds all conversations, so search runs across them (L6). It uses WAL mode, so the UI can read while an agent writes. On the JVM, the driver is `org.xerial:sqlite-jdbc`, the one Tutilis ships, behind a `Store` interface. If size or a target ever calls for a different engine, only the `Store` implementation changes.
+**One SQLite library file** holds all conversations, so search runs across them (L6). It uses WAL mode, so the UI can read while an agent writes. On the JVM, the driver is `org.xerial:sqlite-jdbc`, behind a `Store` interface. If size or a target ever calls for a different engine, only the `Store` implementation changes.
 
-Unlike Tutilis's dossier store, which keeps one proto3-JSON document per plan, Loquilis has a huge number of small entries that are paged and searched constantly. So **header fields are columns, and bodies are proto binary**. People read and diff the exports, which stay proto3-JSON text.
+Unlike a store that keeps one JSON document per record, Loquilis has a huge number of small entries that are paged and searched constantly. So **header fields are columns, and bodies are proto binary**. People read and diff the exports, which stay proto3-JSON text.
 
 | Table | Holds | Note |
 |---|---|---|
@@ -134,80 +137,80 @@ Unlike Tutilis's dossier store, which keeps one proto3-JSON document per plan, L
 | `blob` | sha256, size, media type, compressed bytes *or* a file path | Content-addressed and deduplicated. Content up to 4 KB stays inline in the entry, and blobs over 1 MB are stored as files beside the db. Both thresholds are to be tuned against real tool outputs. |
 | `entry_fts` | FTS5 over user text, agent text, tool input, tool output | Contentless: it keeps tokens only. Bodies are proto bytes, so SQLite has no text column to reference, and a stored copy would double the library. Snippets are made from the entry when a hit is shown. Private entries are not indexed. |
 
-A test asserts that the columns match the protos, as `DossierSchemaTest` does in Tutilis.
+A test (`everyProtoFieldHasAColumn`, in `SqliteStoreTest`) fails when a field of `Conversation`, `Entry`, `Branch` or `TurnSummary` has no column, so the schema cannot quietly fall behind the model.
 
 **Paging (L3, L4).** A view asks for `turns(conversation, branch, range)` and gets `TurnSummary` rows. It asks for bodies (`entry(id)` and `blob(ref)`) only when something is on screen or opened. The client cache is a bounded LRU of bodies. Nothing loads a whole conversation, and the memory a conversation uses stays the same no matter how long it is.
 
 **Append path (L7).** The adapter writes the raw line first, then upserts the entry. While text streams, the parser emits `ParseOutput.Writing` with the reply so far. `LiveChat` holds that in memory for the window, which shows it at about 10 Hz, and nothing is written but the raw lines. The entry arrives whole, so a stored reply is never half a reply, and `Writing` clears only after the entry, so a reader always finds one or the other. `Recorder` commits a line and its entries together, so a crash cannot leave an entry without its line. A live session writes the two separately, so `recover` replays the raw log through a fresh parser, keeps existing ids, and closes tool calls left open as interrupted.
 
-**Export.** A folder holding `manifest.json`, `entries.jsonl`, `blobs/` and `raw.jsonl.gz` (`export.proto`). That folder is what a git records repo such as `plusauri/cogilis-conversations` would hold. The folder, not the SQLite file, is the interchange format. An export leaves out private entries unless asked. Their raw lines stay as blank lines, so thinking never leaks through the raw log and every other entry's `RawRange` still holds.
+**Export.** A folder holding `manifest.json`, `entries.jsonl`, `blobs/` and `raw.jsonl.gz` (`export.proto`). That folder is what a git records repo would hold. The folder, not the SQLite file, is the interchange format. An export leaves out private entries unless asked. Their raw lines stay as blank lines, so thinking never leaks through the raw log and every other entry's `RawRange` still holds.
 
 ## Libraries
 
-There is one default library, and **File → Open Library** opens another, as in Tutilis.
+There is one default library, in the person's own app data folder. The window opens another library file, a take folder, or the bundled sample when it is named on the command line (`scripts/run-loquilis.sh`, `openArgument` in `app`). There is no menu for opening one yet.
 
 ## Modules
 
 | Module | Depends on | Holds |
 |---|---|---|
 | `loquilis-model` | Wire runtime only | The `.proto` files, the generated Kotlin, and the thin Kotlin layer. Pure, `commonMain`. |
-| `loquilis-store` | `loquilis-agents`, sqlite | `Store` (append, page, search, blobs, raw events), migrations, export/import, and `Recorder`/`recover`, which need the parser seam. |
-| `loquilis-agents` | `loquilis-model` | The `AgentAdapter` seam, `ClaudeStreamParser` (stream-json on stdin) and `GrokAcpParser` (`grok agent stdio`, JSON-RPC), each with `ProcessSession` running the process and a test of its stream. |
-| `loquilis-views` | `loquilis-store`, Compose | `ConversationPager` (turn summaries in pages, a bounded set of decoded turns), `ConversationState`, and the Messages view (user on the right, agent on the left), the Tree view, the Search view and the inspector. |
-| `app` | all of the above | A window, the library picker, and settings. Kept thin. |
+| `loquilis-store` | `loquilis-agents`, sqlite | `Store` (append, page, search, blobs, raw events), migrations, export/import, `recordTake`, and `Recorder`/`recover`, which need the parser seam. `LiveChat`, the `Agent` interface with `ClaudeAgent`, `GrokAgent`, `OpenCodeAgent` and `LocalChatAgent`, `DataGoes`, and `OfflineOnly`. |
+| `loquilis-agents` | `loquilis-model` | The `AgentParser` and `AgentSession` seams. `ClaudeStreamParser` with `ClaudeLiveSession` (stream-json on stdin). `AcpParser` with `GrokLiveSession` and `OpenCodeLiveSession` (the Agent Client Protocol, JSON-RPC on stdin). The command-line sessions run their process through `ProcessSession`. `OpenAiChatParser` with `HttpChatSession` (a local runner's OpenAI-compatible HTTP interface), and `OllamaSetup` (finding Ollama and downloading a model). |
+| `loquilis-views` | `loquilis-store`, Compose, the ui-kit | `ConversationPager` (turn summaries in pages, a bounded set of decoded turns), `ConversationState`, `LibraryState` and `LibraryWindow`, and the Messages view (user on the right, agent on the left), the Tree view, the Search view and the inspector. Also the console's settings (`ConsoleSettings`, `SettingsCard`), the side panels, guided setup (`SetupPanel`) and keyboard actions (`ConsoleAction`). |
+| `app` | all of the above | The window, the choice of library from the command line, and keeping the settings between runs. Kept thin. |
 
 ## Agents
 
 `AgentParser` turns one agent's stream into entries, a line at a time, so a live turn and a re-parse of stored raw events run the same code. It gives `Append` and `Update` outputs, because an entry can change after it is written: a tool call completes, and text becomes the reply only when the turn ends. `ContentFactory` decides inline or blob for every piece of text, so no adapter can disagree about the threshold.
 
-`LiveChat` is what a host talks to. It starts the agent on the first message, writes what the session produces on one thread, and starts the agent again on the next message after it stops, with `--resume` and the parser and raw numbering carried on from what is stored. A last turn with no result means a crash, so `recover` runs first. Views only read the store: they read the conversation again at most ten times a second while a chat writes.
+`LiveChat` is what a host talks to. It starts the agent on the first message, writes what the session produces on one thread, and starts the agent again on the next message after it stops, carrying on the agent's own session (`--resume` for Claude, `session/resume` over ACP), with the parser and raw numbering carried on from what is stored. A last turn with no result means a crash, so `recover` runs first. Views only read the store: they read the conversation again at most ten times a second while a chat writes.
 
 A reply is read as GitHub-flavored Markdown by `org.jetbrains:markdown` and laid out by our own `MarkdownView`, off the main thread with the rest of its turn. Only what a browser or mail app would open becomes a link, since the agent writes them. The inspector, the Tree and search keep showing the text as stored.
 
-Copying has two levels. `CopyButton` is the one way to copy a whole item, and it sits on each section of the inspector, so the stored text comes out whole with its marks. Text in a bubble can be dragged over and copied with the usual key. A bubble takes its click through `tapWithoutDrag`, because `clickable` swallows the drag that selection needs.
+Copying has two levels. The ui-kit's `CopyIconButton` is the one way to copy a whole item, and it sits on each section of the inspector, so the stored text comes out whole with its marks. Text in a bubble can be dragged over and copied with the usual key. A bubble takes its click through `tapWithoutDrag`, because `clickable` swallows the drag that selection needs.
 
 A permission request is an entry, and so is the answer, as an `AppCommand`. `ParseOutput.Ask` carries each possible answer as the exact line to send, so a host offers the choices without knowing the agent's protocol. "Always" passes back the rules the agent suggested, which `claude` writes to the workspace's `.claude/settings.local.json`. App commands are not in the raw log, so `recover` replays them from their entries, as it does user messages.
 
 `ClaudeLiveSession` runs one `claude` process with messages on stdin, and it emits each raw line before what was parsed from it, which is the order the store must keep. It sends one message per turn: a message sent mid-turn waits, and it is recorded when it goes to the agent. Otherwise a turn's entries would interleave with the next one's. Messages that never went out are reported in `Ended.unsent`.
+
+Grok and OpenCode also run live, through `AcpParser`. The plan was to resume one process per turn, but `grok agent stdio` holds a session, asks permission, cancels and resumes, and `opencode acp` speaks the same protocol. `AgentParser` and `AgentSession` needed no change. Text arrives in chunks, which become one entry when the run of chunks ends. Each Grok session sets `yoloMode` false, so Grok asks here even when the person's own settings approve everything.
 
 **What Claude's stream showed** (Claude Code 2.1.x, read across 80 turns of recorded sessions):
 
 - The user's message is not echoed, so the app records it.
 - One API message arrives as several `assistant` events, one block each.
 - Which text is the reply is only known at the `result`.
-- `total_cost_usd` is cumulative over a session, while `usage` covers one turn.
+- `total_cost_usd` is cumulative over a session and carries on across `--resume`, while `usage` covers one turn. `model_usage_since_last_result` has the turn's own cost, per model, except on a stopped turn.
+- With `--include-partial-messages`, which `ClaudeLiveSession` passes, `stream_event` lines carry the reply as it is written, so it shows word by word.
 - Tool results can hold images, which the parser sends to the blob store.
 - `tool_progress`, `thinking_tokens`, `task_*` and allowed `rate_limit_event` lines are telemetry. They stay in the raw log and make no entry.
 
 ### Known gaps
 
-- **Artifacts are not captured yet.** The stream says a tool ran, not what files it left behind. Cogilis finds figures by looking at the workspace, so Loquilis needs a workspace watcher, or the Tutilis-side importer has to supply them. Until then, nothing creates `Artifact` entries, and T8 is unproven. The fixture take has no figures.
+- **Artifacts are not captured yet.** The stream says a tool ran, not what files it left behind. The recorder that made the fixture finds figures by looking at the workspace, so Loquilis needs a workspace watcher, or an importer has to supply them. Until then, nothing creates `Artifact` entries, and T8 is unproven. The fixture take has no figures.
 - **Only interrupts and permission answers are sent as `AppCommand`s.** `SetModel`, `SetPermissionMode`, `Restart` and `Fork` stay unused.
-- **Cost after `--resume` is unproven.** The parser takes each turn's cost as the change in `total_cost_usd`, which starts from zero for each process. If a resumed process reports a total that includes earlier sessions, that process's first turn is overcounted.
+- **A resumed turn can lose its cost.** The parser takes a turn's cost from `model_usage_since_last_result`, and otherwise from the change in `total_cost_usd`. After `--resume` it has no earlier total to subtract, so a first resumed turn whose result lacks `model_usage_since_last_result`, such as a stopped turn, records a cost of zero.
 - **The conversation list shows the newest 500.** Search still reaches the rest.
-- **Text does not stream by the word.** The session gets whole blocks. Word-by-word text needs `--include-partial-messages` and handling for its events.
 - **Attachments are not sent.** `send` takes text only.
-- **Subagents are tested on hand-written lines only.** No recorded stream has one.
+- **Subagents are tested on hand-written lines only.** No recorded stream has one. A subagent's entries hang under the tool call that started it, and no `SubAgent` entry is made yet.
 - **Turns cover the main branch only.** Forked entries store and export, but no turn rows are kept for a fork until branching is built.
 - **A turn is read whole.** Views page by turn, so one turn of very many entries is decoded all at once when shown. Laying out one turn at a time also means a tool result arriving in a later turn than its call shows on its own line.
-- **`recover` assumes the parser wrote every entry but user messages.** An app-written entry such as an `AppCommand` will need handling there once commands are sent.
-- **Grok runs live, not per turn.** The plan was to resume one process per turn, but `grok agent stdio` holds a session, asks permission, cancels and resumes. `AgentParser` and `AgentSession` needed no change. Text arrives in chunks, which become one entry when the run of chunks ends. Each session sets `yoloMode` false, so Grok asks here even when the person's own settings approve everything.
 
 ## Tests that prove the model
 
-- **Fixture round trip** (`aRecordedTakeRoundTripsToIdenticalFiles`): a recorded transcript goes raw → entries → export → import → export, and the two exports are identical files. Claude only until the Grok adapter exists.
-- **Cogilis parity** (`ClaudeParityTest`): a real Cogilis take, replayed from its raw stream, has every turn, step, input, output head, reply, duration, cost and timestamp its record holds. This is the proof for rule 0001. Figures and the Cogilis-only extensions are not covered yet.
+- **Fixture round trip** (`aRecordedTakeRoundTripsToIdenticalFiles`): a recorded transcript goes raw → entries → export → import → export, and the two exports are identical files. Claude only: no Grok or OpenCode stream is recorded as a fixture, so `AcpParser` is tested on hand-written lines.
+- **Fixture parity** (`ClaudeParityTest`): the fixture take, replayed from its raw stream, has every turn, step, input, output head, reply, duration, cost and timestamp its `conversation.json` holds. This is the proof for decision 0001. Figures and the Tutilis-only extensions are not covered yet.
 - **A real session** (`theRealClaudeKeepsContextAcrossMessages`, `LOQUILIS_LIVE=1`): one short exchange with the real `claude`, opt-in because it costs money.
 - **Scale** (`ScaleTest`, on a 256 MB heap): a synthetic conversation of 100k entries and 1 GB of output. Opening it, paging from the middle and searching it each stay within a time budget asserted in the test. Normal runs use a small size, and `LOQUILIS_SCALE=1` runs the full one.
 - **Crash** (`CrashTest`): a writer process is killed mid-stream, and after `recover` the library matches an uninterrupted run over the same lines.
-- **Schema:** `buf lint` and `buf breaking`, plus the column-to-proto check.
+- **Schema:** `buf lint` and `buf breaking` in CI, plus `everyProtoFieldHasAColumn`.
 
 ## Decided 2026-11-03
 
 1. **Thinking is kept**, as `VISIBILITY_PRIVATE`. It is hidden by default and left out of exports unless asked for.
 2. **Branching is modeled now** (`parent_id`, `Branch`, `Fork`). The branching UI comes later.
-3. **One default library**, with File → Open Library.
+3. **One default library.** Another opens when it is named on the command line. A menu for opening one is not built yet.
 4. **Blob thresholds:** content up to 4 KB stays inline, and blobs over 1 MB are stored as files. Both are to be tuned against real tool outputs.
 5. **Storage is SQLite** (`sqlite-jdbc`) for now, behind `Store`. It can be upgraded if size requires it.
-6. **Protobuf is the source of truth** for the model, as in Tutilis. Kotlin is generated by Wire, with a thin hand-written layer on top. The store keeps header columns and binary bodies, and exports are proto3-JSON.
+6. **Protobuf is the source of truth** for the model. Kotlin is generated by Wire, with a thin hand-written layer on top. The store keeps header columns and binary bodies, and exports are proto3-JSON.
 7. **Extensions are our own `Extension` message**, not `google.protobuf.Any`, so an export never depends on knowing another app's types.

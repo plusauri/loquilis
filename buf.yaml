@@ -1,7 +1,9 @@
 # buf: lint and breaking-change checks for the model's .proto files.
 #   buf lint
 #   buf breaking --against '.git#branch=main'
-# Not yet wired into CI; see doc/design/conversation-model.md, "Schema discipline".
+# CI (.github/workflows/ci.yml) runs buf lint, and buf breaking against the pull request's base branch on a
+# pull request, or against the previous push on a push to main. See doc/design/conversation-model.md,
+# "Schema discipline".
 version: v2
 modules:
   - path: loquilis-model/protobuf

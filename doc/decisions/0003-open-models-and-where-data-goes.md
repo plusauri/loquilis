@@ -2,9 +2,20 @@
 
 ## Status
 
-Direction and refinements accepted 2026-11-07 (Dan). Plain chat is built, as `LocalChatAgent`, `HttpChatSession` and `OpenAiChatParser`. On 2026-11-08 it ran against real Ollama 0.40.15 with `gemma4:e2b`: found with no setup, word by word, and Stop kept the partial reply. The indicator is built as `Agent.dataGoes` and `DataGoes`: under the message box in words, and as a mark in the conversation list. Claude reads as Anthropic unless `ANTHROPIC_BASE_URL`, Bedrock or Vertex redirects it (then unknown), Grok as xAI, and plain local chat as this computer when the runner's address is loopback and the model is not an Ollama cloud model, which plain chat never picks unasked. Guided setup is built as `OllamaSetup` and `SetupPanel`: New Local conversation checks for Ollama and a model, sends a newcomer to Ollama's own download page, starts the app, and downloads a model from the shipped catalog (`local-models.json`) with progress. It recommends the largest model using at most about a third of installed memory (free memory swings too much to rest on), and checks the disk first. Offline only is built as `OfflineOnly` and `joinedNetworks` (2026-11-18): a switch in the conversation list, kept between runs, that refuses a send while any interface holds an address beyond loopback and link-local, or while the conversation goes anywhere but this computer, checked before every send; downloads and the Ollama site are off while it is on. A local model is held two minutes after it answers and let go on quit. OpenCode 2.3.2 is the first open agent (`OpenCodeAgent`, `OpenCodeLiveSession`, the Grok parser generalized as `AcpParser`). As it comes it runs every tool without asking, wrote outside its folder in a test, starts on its own cloud model, and reads the person's Claude instructions; Loquilis starts it with `OPENCODE_CONFIG_CONTENT` permissions set to ask (reading and searching allowed), `OPENCODE_DISABLE_FREE_MODELS` and `OPENCODE_DISABLE_CLAUDE_CODE`, sets the model over ACP and sends nothing until OpenCode confirms it. Its indicator is a fourth state, the model on this computer with tools that can reach the network. Only models Ollama says can call tools are offered. The rest is not built. Claims about other products are checked again before they are built on.
+Accepted. Claims about other products are checked again before they are built on.
 
-## The goal, as Dan put it
+### Built so far
+
+- **Plain chat with a local model:** `LocalChatAgent` (in `loquilis-store`), with `HttpChatSession` and `OpenAiChatParser` (in `loquilis-agents`) speaking a runner's OpenAI-compatible HTTP interface. Replies stream word by word, and Stop keeps the partial reply.
+- **The indicator:** `Agent.dataGoes` and `DataGoes`, shown in words under the message box and as a mark in the conversation list. Claude reads as Anthropic unless `ANTHROPIC_BASE_URL`, Bedrock or Vertex redirects it, which reads as unknown. Grok reads as xAI. Plain local chat reads as this computer when the runner's address is loopback and the model is not an Ollama cloud model, which plain chat never picks unasked.
+- **Guided setup:** `OllamaSetup` and `SetupPanel`. A new local conversation checks for Ollama and a model, sends a newcomer to Ollama's own download page, starts Ollama, and downloads a model from the shipped catalog (`local-models.json`) with progress. It recommends the largest model that uses at most about a third of installed memory (free memory swings too much to rest on), and checks the disk first.
+- **Offline only:** `OfflineOnly` and `joinedNetworks`. A switch, kept between runs, refuses a send while any network interface holds an address beyond loopback and link-local, or while the conversation goes anywhere but this computer. It is checked before every send. Downloads and the Ollama site are off while it is on.
+- **Model memory:** a local model is held in memory for a few minutes after it answers (two by default, set in `ConsoleSettings`) and let go when the console quits.
+- **OpenCode, the first open agent:** `OpenCodeAgent` and `OpenCodeLiveSession`, read by `AcpParser`, the same parser Grok uses. As OpenCode comes, it runs every tool without asking, starts on its own cloud model, and reads the person's Claude instructions. Loquilis starts it with permissions set to ask (reading and searching allowed), with its free cloud models and its reading of Claude instructions turned off, sets the model over ACP, and sends nothing until OpenCode confirms the model. Only models Ollama says can call tools are offered.
+
+Not built yet: a catalog refreshed without a new release, other runners and agents, and the stronger network checks under "Offline only" below.
+
+## The goal
 
 Using an agent console is straightforward for the big providers, who already offer their own. What is hard for someone new to AI is using the open offerings. Loquilis should solve that out of the box, so a person can get Loquilis, install a free and open option, and get questions answered without giving away their data.
 
@@ -14,9 +25,9 @@ Loquilis serves every kind of agent, with special consideration for people who w
 
 ## Refinements
 
-- **A model runner is not an agent.** Ollama runs models. An agent is a separate program that adds tools on top of a model. A newcomer who only wants answers needs a runner and a model, and no agent at all. So there are two tiers: plain chat with a local model, which is the easy path, and a local agent with tools, which comes later.
-- **Offer a short list, not a fixed "top three".** The best open models change every few months, and the right one depends on the machine's memory and disk. Loquilis checks the machine and recommends from a list it can update without a new release, in place of naming three forever.
-- **Installing is the user's choice, and Loquilis carries them through it.** The goal is that a newcomer can use an open model with no terminal and no prior knowledge (Dan, 2026-11-07). So Loquilis notices when no runner is present, offers one clear path, and guides the install with plain steps, a link to the official installer, and a check that it worked. It downloads the recommended model for them, with its size stated and progress shown. It acts only with clear consent, and it never pipes a script from the internet into a shell. Models need the internet once, to download, and that is said plainly.
+- **A model runner is not an agent.** Ollama runs models. An agent is a separate program that adds tools on top of a model. A newcomer who only wants answers needs a runner and a model, and no agent at all. So there are two tiers: plain chat with a local model, which is the easy path, and a local agent with tools.
+- **Offer a short list, not a fixed "top three".** The best open models change every few months, and the right one depends on the machine's memory and disk. Loquilis checks the machine and recommends from a list kept as data, in place of naming three forever.
+- **Installing is the user's choice, and Loquilis carries them through it.** The goal is that a newcomer can use an open model with no terminal and no prior knowledge. So Loquilis notices when no runner is present, offers one clear path, and guides the install with plain steps, a link to the official installer, and a check that it worked. It downloads the recommended model for them, with its size stated and progress shown. It acts only with clear consent, and it never pipes a script from the internet into a shell. Models need the internet once, to download, and that is said plainly.
 - **Say "open" carefully.** Most open models are open-weight, with licenses that vary. The product talks about where the data goes, which is what the person cares about.
 
 ## Terms
@@ -34,19 +45,20 @@ These four layers keep the product, its docs and its code clear:
 
 Keep what changes often in data and what is risky out of reach:
 
-- **A catalog, as data.** Runners, models and agents, with official install links, the memory and disk each needs, and whether it stays local. It is a file Loquilis can refresh without a new release, a copy ships inside so it works offline, and a client console can replace it.
-- **Generic adapters, so a new option needs no code.** One for the OpenAI-compatible HTTP interface that runners commonly serve, and one for the Agent Client Protocol that Grok speaks. `GrokAcpParser` would become the second, with Grok's extras on top. A new runner or agent that speaks either one is then a catalog entry. OpenCode documents ACP over stdin and stdout as `opencode acp`, so it is the likely first open agent. Others, including Goose and Aider, are still to be checked.
-- **Memory is the first thing a newcomer feels.** On the first real run, a 16 GB Mac with other work open felt the system jitter while `gemma4:e2b` (7.5 GB on disk) loaded and answered. So the catalog recommends by memory free at the time, not only installed, says before a download what the model will take while it runs, and the console can tell the runner to unload the model when a conversation goes idle, since Ollama by default keeps it loaded for a few minutes.
-- **A code seam for the rest.** `LibraryState` already takes a map of `Agent`s, so a client console can add its own.
+- **A catalog, as data.** Runners, models and agents, with official install links, the memory and disk each needs, and whether it stays local. Today it is the models in `local-models.json`, shipped inside so it works offline. Refreshing it without a new release, and letting a client console replace it, are still to come.
+- **Generic adapters, so a new option needs little code.** One for the OpenAI-compatible HTTP interface that runners commonly serve (`OpenAiChatParser`, `HttpChatSession`), and one for the Agent Client Protocol (`AcpParser`), which serves both Grok and OpenCode. A new runner or agent that speaks either one then needs only a small `Agent`. Others, including Goose and Aider, are still to be checked.
+- **Memory is the first thing a newcomer feels.** On the first real run, a 16 GB Mac with other work open felt the system jitter while a 7.5 GB model loaded and answered. So the recommendation leaves most of the installed memory to everything else, the catalog says before a download what the model will take while it runs, and the console tells the runner to let the model go after a short idle time and on quit, since Ollama by default keeps it loaded for a few minutes.
+- **A code seam for the rest.** `LibraryState` takes a map of `Agent`s, so a client console can add its own.
 - **No plugins that download and run code, for now.** A tool whose promise is that data stays private should not run third-party code it fetched.
 
 ## The indicator
 
-Three states, in plain words, visible on every conversation and at the box you write in:
+Four states, in plain words, visible on every conversation and at the box you write in (`DataGoes`):
 
-- **Sent to a company**, naming it: "Sent to Anthropic".
-- **Stays on this computer.**
-- **Unknown**, when Loquilis cannot tell. Never guess toward the safe answer.
+- **Sent to a company** (`ToCompany`), naming it: "Sent to Anthropic".
+- **Stays on this computer** (`StaysHere`): a runner on this computer, with no tools that could reach further.
+- **Model on this computer, with tools that can reach the network** (`ModelHere`): a local agent such as OpenCode, whose shell or web tools can send data even though the model runs here.
+- **Unknown** (`Unknown`), when Loquilis cannot tell. Never guess toward the safe answer.
 
 What it can honestly rest on:
 
@@ -56,9 +68,9 @@ What it can honestly rest on:
 
 ## Offline only
 
-Dan's idea of refusing questions while the internet is on works, with limits, and it is the strongest promise on offer because a person can understand it.
+Refusing questions while the internet is on works, with limits, and it is the strongest promise on offer because a person can understand it.
 
-- Check the machine's own network interfaces and routes. Do not probe a website to find out: that sends traffic to someone, in the one mode that promises none.
+- Check the machine's own network interfaces. Do not probe a website to find out: that sends traffic to someone, in the one mode that promises none.
 - It covers the machine, so a VPN or a phone hotspot coming up mid-conversation matters. Check before every send.
 - Every cloud agent is unavailable in this mode, and Loquilis itself makes no network calls.
 
@@ -66,6 +78,6 @@ Stronger checks to look at later: watching which outside addresses the agent's p
 
 ## How it fits the design
 
-- `SessionEvent` and `AgentSession` do not require a command-line program, so a local runner's streaming HTTP reply can arrive as raw lines like any other. This is the first test of that seam, and it is worth doing early for that reason.
-- Where data goes belongs on the conversation's `AgentBinding` in the model, so that it is recorded with the conversation.
+- `SessionEvent` and `AgentSession` do not require a command-line program, so a local runner's streaming HTTP reply arrives as raw lines like any other. `HttpChatSession` proved that seam.
+- Where data goes is worked out today by `Agent.dataGoes` from the conversation and the agent's settings. Recording it on the conversation's `AgentBinding` in the model, so that it stays with the conversation, is still to come.
 - `Brand` and `ConsoleAction` set the pattern: a client console chooses what it offers, including offering only local agents.

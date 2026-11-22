@@ -12,8 +12,8 @@ import loquilis.model.Extension
  *
  * ```kotlin
  * // In the app built on Loquilis:
- * val TurnExt = ExtensionKey(CogilisTurn.ADAPTER)
- * val beat = entry.ext(TurnExt)?.beat_id
+ * val TurnNoteKey = ExtensionKey(TurnNote.ADAPTER)
+ * val note = entry.ext(TurnNoteKey)?.note
  * ```
  *
  * Loquilis never reads an extension. It stores the [Extension] and writes it back, including ones

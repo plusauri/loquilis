@@ -2,15 +2,14 @@
 
 ## Status
 
-Accepted, 2026-11-07. Direction only. None of this is built yet, and it does not need to be built before it is needed.
+Accepted, 2026-11-07. Built so far: the conversation list and the inspector are collapsible and resizable side panels (`PanelState`, `PanelSeam`), and the console keeps whether each shows and how wide it is (`ConsoleSettings`). Keyboard actions have begun (`ConsoleAction`, `KeyBindings`, `DefaultKeys`), and a client can pass its own `KeyBindings` to `LibraryWindow`. A client can pass its own `Palette` and type to the theme. Theming of the whole console, agent avatars and full keyboard use are still direction, to be built when they are needed.
 
 ## Context
 
-Loquilis is a library that people pull in to build their own agent consoles. The first one is a Cogilis console, themed with the Cogilis robot as its avatar. The Loquilis window is the plain console on top of the same library.
+Loquilis is a library that people pull in to build their own agent consoles. The first planned one is a console for Cogilis, Plusauri's agent workspace for Tutilis (see the README's "Terms"), themed with that agent's own avatar. The Loquilis window is the plain console on top of the same library.
 
 ## What is coming
 
-- The left conversations panel and the right inspector panel become collapsible.
 - Clients theme the whole console.
 - Clients give the agent an avatar image.
 - The console is fully usable from the keyboard, and clients can change the shortcuts.

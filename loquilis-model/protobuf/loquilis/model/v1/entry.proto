@@ -36,7 +36,7 @@ message Entry {
   // wrote itself, such as a user message or an app command.
   RawRange raw = 9;
   EntryBody body = 10;
-  // Data from apps built on Loquilis, e.g. tutilis.cogilis.v1.EngineCallsExt on a tool call.
+  // Data from apps built on Loquilis, e.g. com.example.myapp.v1.ToolCallNote on a tool call.
   repeated Extension extensions = 15;
 }
 

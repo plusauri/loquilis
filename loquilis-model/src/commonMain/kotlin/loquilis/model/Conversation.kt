@@ -139,7 +139,7 @@ public class Conversation(
 ) : Message<Conversation, Nothing>(ADAPTER, unknownFields) {
   /**
    * Data from apps built on Loquilis. Loquilis stores and round-trips these without reading them.
-   * Each is a message from the extending app's own .proto, e.g. tutilis.cogilis.v1.TakeExt.
+   * Each is a message from the extending app's own .proto, e.g. com.example.myapp.v1.ConversationNote.
    */
   @field:WireField(
     tag = 15,

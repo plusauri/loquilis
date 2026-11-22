@@ -118,7 +118,7 @@ private val KitScrollCueWords = ScrollCueWords(down = "More below", up = "More a
 private val KitYearInputWords = YearInputWords(placeholder = "Year")
 
 /**
- * The console's theme: the kit's Plusauri theme underneath, so kit controls look as they do in Tutilis, and
+ * The console's theme: the kit's Plusauri theme underneath, so kit controls keep the kit's own look, and
  * [palette] and [type] over it for the console's own views. A client passes its own to retheme.
  */
 @Composable

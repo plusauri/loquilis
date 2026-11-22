@@ -610,7 +610,7 @@ internal fun OfflineOnlySwitch(state: LibraryState, modifier: Modifier = Modifie
 private const val NETWORK_LOOK_MILLIS = 3_000L
 
 /**
- * A setting that is on or off, as the kit's slide toggle with its label, the one Tutilis uses. Every on-or-off
+ * A setting that is on or off, as the kit's slide toggle with its label. Every on-or-off
  * choice the console offers comes through here. Plain on and off, not good and bad, so not red and green.
  */
 @Composable

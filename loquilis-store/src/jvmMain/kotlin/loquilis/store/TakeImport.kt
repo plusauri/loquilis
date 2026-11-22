@@ -16,7 +16,7 @@ import loquilis.core.Ulid
 import loquilis.model.AgentBinding
 import loquilis.model.Conversation
 
-/** Records a take folder from a records repo, `conversation.json` plus `raw.jsonl.gz`, and returns its id. */
+/** Records a take, one recorded agent session in a folder holding `conversation.json` and `raw.jsonl.gz`, and returns its id. */
 fun recordTake(store: Store, folder: Path): String =
     recordTake(store, Files.newInputStream(folder.resolve("conversation.json")), Files.newInputStream(folder.resolve("raw.jsonl.gz")))
 

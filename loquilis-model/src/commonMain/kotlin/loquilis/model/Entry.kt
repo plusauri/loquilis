@@ -126,7 +126,7 @@ public class Entry(
   unknownFields: ByteString = ByteString.EMPTY,
 ) : Message<Entry, Nothing>(ADAPTER, unknownFields) {
   /**
-   * Data from apps built on Loquilis, e.g. tutilis.cogilis.v1.EngineCallsExt on a tool call.
+   * Data from apps built on Loquilis, e.g. com.example.myapp.v1.ToolCallNote on a tool call.
    */
   @field:WireField(
     tag = 15,

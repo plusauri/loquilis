@@ -108,7 +108,7 @@ private fun summaryLine(pager: ConversationPager): String = buildList {
 
 /**
  * A row of mutually exclusive choices: the kit's house pick-one control (`MultiButtonSelect` in its compact
- * toolbar form), the same one Tutilis uses, with a check on the choice that is on so color is not the only cue.
+ * toolbar form), with a check on the choice that is on so color is not the only cue.
  */
 @Composable
 internal fun <T> PickOne(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit) {
