@@ -12,25 +12,31 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # Actions are pinned to commit SHAs; Dependabot keeps them current.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 2
-      - uses: actions/setup-java@v4
+          # The schema check compares against the base branch or the previous push, so it needs history.
+          fetch-depth: 0
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
           java-version: "17"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
       - name: Test
         run: ./gradlew :loquilis-model:jvmTest :loquilis-agents:jvmTest :loquilis-store:jvmTest :loquilis-views:jvmTest :app:jvmTest
       - name: Generated code matches the protos
         run: |
           ./gradlew :loquilis-model:generateCommonMainProtos
           git diff --exit-code -- loquilis-model/src/commonMain/kotlin/loquilis/model
-      - uses: bufbuild/buf-setup-action@v1
+      - uses: bufbuild/buf-setup-action@a47c93e0b1648d5651a065437926377d060baa99 # v1.50.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Schema lint
         run: buf lint
-      - name: Schema breaking changes
-        if: github.event_name == 'push'
-        run: buf breaking --against '.git#ref=HEAD~1'
+      # A pull request is checked against the branch it targets; a push against the commit before it.
+      - name: Schema breaking changes (pull request)
+        if: github.event_name == 'pull_request'
+        run: buf breaking --against ".git#branch=origin/${{ github.base_ref }}"
+      - name: Schema breaking changes (push)
+        if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
+        run: buf breaking --against ".git#ref=${{ github.event.before }}"

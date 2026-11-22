@@ -126,7 +126,15 @@ class LibraryState(
 
     /** Why a message in [conversationId] cannot be sent now, or null when it can. */
     fun refusal(conversationId: String): String? =
-        if (!offlineOnly) null else OfflineOnly.refusal(dataGoes(conversationId), networks().also { joined = it })
+        missingAgent(conversationId)?.let { "This conversation was with $it, which this console does not offer, so it cannot go on here." }
+            ?: if (!offlineOnly) null else OfflineOnly.refusal(dataGoes(conversationId), networks().also { joined = it })
+
+    /**
+     * The agent [conversationId] was held with, when this console does not offer it. Such a conversation can be
+     * read but not continued: handing it to another agent would send its history somewhere it never went.
+     */
+    private fun missingAgent(conversationId: String): String? =
+        store.conversation(conversationId)?.agent?.cli?.takeIf { it.isNotEmpty() && it !in agents }
 
     /** The agents a new conversation can start with, by their command-line tool's name. */
     val agentNames: List<String> get() = agents.keys.filter { it !in settings.hiddenAgents }.ifEmpty { agents.keys.toList() }
@@ -212,12 +220,17 @@ class LibraryState(
     fun chat(conversationId: String): LiveChat =
         synchronized(chats) { chats.getOrPut(conversationId) { LiveChat(store, conversationId, agentOf(conversationId), now) } }
 
-    /** A stored conversation goes on with the agent that had it, or the first one if that one is not here. */
+    /**
+     * The agent a stored conversation goes on with. When that agent is not offered here, the first one stands in
+     * only so the conversation can be shown; [refusal] keeps anything from being sent through it.
+     */
     private fun agentOf(conversationId: String): Agent =
         agents[store.conversation(conversationId)?.agent?.cli] ?: agents.values.first()
 
     /** Where what is written in [conversationId] goes, as its agent can tell from what it uses. */
-    fun dataGoes(conversationId: String): DataGoes = agentOf(conversationId).dataGoes(store.conversation(conversationId))
+    fun dataGoes(conversationId: String): DataGoes =
+        if (missingAgent(conversationId) != null) DataGoes.Unknown
+        else agentOf(conversationId).dataGoes(store.conversation(conversationId))
 
     /** What [conversationId] says beside where its data goes: the model, once one is known. */
     fun goesLine(conversationId: String): String =

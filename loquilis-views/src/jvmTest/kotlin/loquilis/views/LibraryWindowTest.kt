@@ -32,6 +32,7 @@ import loquilis.store.ClaudeAgent
 import loquilis.store.DataGoes
 import loquilis.store.SqliteStore
 import loquilis.store.Store
+import loquilis.store.newConversation
 
 /** The window with a shell script standing in for `claude`, and a real library on disk. */
 class LibraryWindowTest {
@@ -69,8 +70,10 @@ class LibraryWindowTest {
         waitForIdle()
     }
 
+    // Waits on what is shown, not on time. The limit only bounds a failure: a cold CI runner has taken longer
+    // than 10 s to compose the first window.
     private fun ComposeUiTest.showing(text: String) {
-        waitUntil(timeoutMillis = 10_000) { onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+        waitUntil(timeoutMillis = 30_000) { onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
     }
 
     private fun ComposeUiTest.write(text: String) {
@@ -426,6 +429,20 @@ class LibraryWindowTest {
         showing("Plovers are shorebirds.")
         showing("Off the network. Local models only.")
         showing("Stays on this computer · m · offline only")
+        state.close()
+    }
+
+    @Test fun aConversationWithAnAgentThisConsoleDoesNotOfferIsNeverSentElsewhere() = runDesktopComposeUiTest(1100, 700) {
+        val held = store.newConversation(dir, java.time.Instant.now(), cli = "local", model = "m", title = "Kept on this computer")
+        val state = LibraryState(store, mapOf("claude" to answers), first = held.id, networks = { emptyList() })
+        setContent { ReviewTheme { LibraryWindow(state) { _, _ -> state.newConversation(dir) } } }
+        waitForIdle()
+        assertEquals(DataGoes.Unknown, state.dataGoes(held.id), "no claim about where it would go")
+        write("Tell me about plovers")
+        onNodeWithText("Send").performClick()
+        showing("This conversation was with local, which this console does not offer, so it cannot go on here.")
+        assertEquals("Tell me about plovers", state.drafts[held.id], "the message stays typed")
+        assertEquals(0, state.current!!.pager.turnCount)
         state.close()
     }
 

@@ -9,8 +9,8 @@ import java.util.Properties
 object AppVersion {
     private const val MAJOR = 0
     private const val MINOR = 1
-    private const val PATCH = 23
-    const val LAST_CHANGE = "The command key is Ctrl off a Mac (Ctrl-N); CI builds again"
+    private const val PATCH = 24
+    const val LAST_CHANGE = "A conversation whose agent is not offered here is refused, not sent to another"
 
     const val TEXT = "$MAJOR.$MINOR.$PATCH"
 

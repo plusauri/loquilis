@@ -50,10 +50,13 @@ kotlin {
     }
 }
 
+val isMac = System.getProperty("os.name").orEmpty().startsWith("Mac")
+
 compose.desktop {
     application {
         mainClass = "loquilis.app.MainKt"
-        jvmArgs += "-Xdock:name=Loquilis"
+        // -Xdock is a macOS launcher option; another JVM refuses to start with it.
+        if (isMac) jvmArgs += "-Xdock:name=Loquilis"
     }
 }
 
@@ -79,7 +82,7 @@ tasks.register<JavaExec>("runWindow") {
     mainClass = "loquilis.app.MainKt"
     classpath = fileTree(runStage.map { it.dir(thisRun) })
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
-    jvmArgs("-Xdock:name=Loquilis", "-Dcompose.application.configure.swing.globals=true")
+    jvmArgs(listOfNotNull("-Xdock:name=Loquilis".takeIf { isMac }, "-Dcompose.application.configure.swing.globals=true"))
 }
 
 tasks.withType<Test>().configureEach {
